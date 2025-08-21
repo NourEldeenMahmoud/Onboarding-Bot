@@ -20,8 +20,8 @@ using Microsoft.Extensions.Logging;
 
 class Program
 {
-    private DiscordSocketClient _client;
-    private InteractionService _interactionService;
+    private DiscordSocketClient? _client;
+    private InteractionService? _interactionService;
     private Dictionary<string, int> _inviteUses = new Dictionary<string, int>();
     string _token = "";
     string _ChatGPTApiKey = "";
@@ -116,8 +116,8 @@ class Program
     {
         Env.Load();
 
-        _token = Environment.GetEnvironmentVariable("DISCORD_TOKEN");
-        _ChatGPTApiKey = Environment.GetEnvironmentVariable("OPENAI_KEY");
+        _token = Environment.GetEnvironmentVariable("DISCORD_TOKEN") ?? "";
+        _ChatGPTApiKey = Environment.GetEnvironmentVariable("OPENAI_KEY") ?? "";
         
         // Load configuration from environment variables
         LoadConfiguration();
@@ -168,13 +168,19 @@ class Program
     {
         try
         {
+            if (_client == null || _interactionService == null)
+            {
+                Console.WriteLine("[Error] Client or InteractionService not initialized");
+                return;
+            }
+
             var context = new SocketInteractionContext(_client, interaction);
             var result = await _interactionService.ExecuteCommandAsync(context, null);
             
             if (!result.IsSuccess)
             {
                 Console.WriteLine($"[Interaction Error] {result.ErrorReason}");
-                await LogError("Interaction Error", result.ErrorReason, $"Failed to execute command: {interaction.Data.Name}");
+                await LogError("Interaction Error", result.ErrorReason, $"Failed to execute command: Unknown");
             }
         }
         catch (Exception ex)
@@ -188,6 +194,12 @@ class Program
     {
         try
         {
+            if (_interactionService == null || _client == null)
+            {
+                Console.WriteLine("[Error] Client or InteractionService not initialized");
+                return;
+            }
+
             // Register global commands
             await _interactionService.AddModuleAsync<StoryCommands>(null);
             
@@ -207,14 +219,20 @@ class Program
 
     private async Task ReadyAsync()
     {
-        Console.WriteLine($"[Ready] {_client.CurrentUser} is connected!");
-
-        foreach (var guild in _client.Guilds)
+        if (_client?.CurrentUser != null)
         {
-            var invites = await guild.GetInvitesAsync();
-            foreach (var invite in invites)
+            Console.WriteLine($"[Ready] {_client.CurrentUser} is connected!");
+        }
+
+        if (_client != null)
+        {
+            foreach (var guild in _client.Guilds)
             {
-                _inviteUses[invite.Code] = invite.Uses ?? 0;
+                var invites = await guild.GetInvitesAsync();
+                foreach (var invite in invites)
+                {
+                    _inviteUses[invite.Code] = invite.Uses ?? 0;
+                }
             }
         }
     }
@@ -257,7 +275,7 @@ class Program
             string inviterStory = hasInviter ? LoadStory(inviterId) : "";
 
             // الحصول على قناة Join the Family
-            var joinChannel = _client.GetChannel(joinFamilyChannelId) as ITextChannel;
+            var joinChannel = _client?.GetChannel(joinFamilyChannelId) as ITextChannel;
             if (joinChannel == null)
             {
                 Console.WriteLine("[Warning] Join Family channel not found, onboarding cancelled");
@@ -345,7 +363,7 @@ class Program
 
             if (storyChannelId != 0)
             {
-                var storyChannel = _client.GetChannel(storyChannelId) as IMessageChannel;
+                var storyChannel = _client?.GetChannel(storyChannelId) as IMessageChannel;
                 if (storyChannel != null)
                 {
                     if (hasInviter)
@@ -400,7 +418,7 @@ class Program
                 return;
             }
 
-            var role = user.Guild.GetRole(roleId);
+            var role = user.Guild?.GetRole(roleId);
             if (role != null)
             {
                 await user.AddRoleAsync(role);
@@ -510,7 +528,7 @@ class Program
             if (logChannelId == 0 || _client == null)
                 return;
 
-            var logChannel = _client.GetChannel(logChannelId) as IMessageChannel;
+            var logChannel = _client?.GetChannel(logChannelId) as IMessageChannel;
             if (logChannel == null)
             {
                 Console.WriteLine($"[Warning] Log channel with ID {logChannelId} not found.");
@@ -600,17 +618,26 @@ class Program
             return Task.CompletedTask;
         }
 
-        _client.MessageReceived += Handler;
+        if (_client != null)
+        {
+            _client.MessageReceived += Handler;
+        }
 
         var resultTask = tcs.Task;
         if (await Task.WhenAny(resultTask, Task.Delay(timeoutSeconds * 1000)) == resultTask)
         {
-            _client.MessageReceived -= Handler;
+            if (_client != null)
+            {
+                _client.MessageReceived -= Handler;
+            }
             return resultTask.Result;
         }
         else
         {
-            _client.MessageReceived -= Handler;
+            if (_client != null)
+            {
+                _client.MessageReceived -= Handler;
+            }
             Console.WriteLine($"[Timeout] User {user.Username} did not respond in time (5 minutes).");
             return "لم يتم الرد في الوقت المحدد";
         }
@@ -627,17 +654,26 @@ class Program
             return Task.CompletedTask;
         }
 
-        _client.MessageReceived += Handler;
+        if (_client != null)
+        {
+            _client.MessageReceived += Handler;
+        }
 
         var resultTask = tcs.Task;
         if (await Task.WhenAny(resultTask, Task.Delay(timeoutSeconds * 1000)) == resultTask)
         {
-            _client.MessageReceived -= Handler;
+            if (_client != null)
+            {
+                _client.MessageReceived -= Handler;
+            }
             return resultTask.Result;
         }
         else
         {
-            _client.MessageReceived -= Handler;
+            if (_client != null)
+            {
+                _client.MessageReceived -= Handler;
+            }
             Console.WriteLine("[Timeout] User did not respond in time.");
             return "لم يتم الرد في الوقت المحدد";
         }
@@ -649,6 +685,10 @@ class Program
         {
             // إرسال الرسالة مع تحديد الأذونات (فقط Owner والشخص المذكور)
             var allowedUsers = new List<ulong> { ownerId, user.Id };
+            if (ownerId == 0)
+            {
+                Console.WriteLine("[Warning] Owner ID not configured, message permissions may not work properly");
+            }
             
             var embed = new EmbedBuilder()
                 .WithColor(0x2f3136) // لون رمادي داكن
@@ -818,7 +858,8 @@ Hidden Docks، Tech Lab، Abandoned Warehouse، والمزيد.
         catch (Exception ex)
         {
             Console.WriteLine("[SaveStory Error] " + ex);
-            await LogError("Story Save Error", ex.ToString(), "Failed to save user story to file");
+            // Note: LogError is async but we can't await it here since this is a sync method
+            Console.WriteLine("[SaveStory Error] Failed to log error to channel - method is synchronous");
         }
     }
 
@@ -827,13 +868,16 @@ Hidden Docks، Tech Lab، Abandoned Warehouse، والمزيد.
         try
         {
             if (!File.Exists(StoriesFile)) return "";
-            var stories = JsonConvert.DeserializeObject<Dictionary<ulong, string>>(File.ReadAllText(StoriesFile));
+            var jsonContent = File.ReadAllText(StoriesFile);
+            if (string.IsNullOrEmpty(jsonContent)) return "";
+            var stories = JsonConvert.DeserializeObject<Dictionary<ulong, string>>(jsonContent) ?? new Dictionary<ulong, string>();
             return stories.ContainsKey(userId) ? stories[userId] : "";
         }
         catch (Exception ex)
         {
             Console.WriteLine("[LoadStory Error] " + ex);
-            _ = Task.Run(() => LogError("Story Load Error", ex.ToString(), "Failed to load user story from file"));
+            // Note: LogError is async but we can't await it here since this is a sync method
+            Console.WriteLine("[LoadStory Error] Failed to log error to channel - method is synchronous");
             return "";
         }
     }
@@ -971,7 +1015,9 @@ public class StoryCommands : InteractionModuleBase<SocketInteractionContext>
             const string StoriesFile = "stories.json";
             if (!File.Exists(StoriesFile)) return "";
             
-            var stories = JsonConvert.DeserializeObject<Dictionary<ulong, string>>(File.ReadAllText(StoriesFile));
+            var jsonContent = File.ReadAllText(StoriesFile);
+            if (string.IsNullOrEmpty(jsonContent)) return "";
+            var stories = JsonConvert.DeserializeObject<Dictionary<ulong, string>>(jsonContent) ?? new Dictionary<ulong, string>();
             return stories.ContainsKey(userId) ? stories[userId] : "";
         }
         catch (Exception ex)

@@ -5432,9 +5432,9 @@
   "project": {
     "version": "1.0.0",
     "restore": {
-      "projectUniqueName": "E:\\Nour Eldeen\\Study\\Self Study\\GitHub\\Onboarding bot\\Onboarding bot.csproj",
-      "projectName": "Onboarding bot",
-      "projectPath": "E:\\Nour Eldeen\\Study\\Self Study\\GitHub\\Onboarding bot\\Onboarding bot.csproj",
+      "projectUniqueName": "E:\\Nour Eldeen\\Study\\Self Study\\GitHub\\Onboarding bot\\Onboardingbot.csproj",
+      "projectName": "Onboardingbot",
+      "projectPath": "E:\\Nour Eldeen\\Study\\Self Study\\GitHub\\Onboarding bot\\Onboardingbot.csproj",
       "packagesPath": "C:\\Users\\NourEldeen\\.nuget\\packages\\",
       "outputPath": "E:\\Nour Eldeen\\Study\\Self Study\\GitHub\\Onboarding bot\\obj\\",
       "projectStyle": "PackageReference",
@@ -5524,11 +5524,14 @@
         "assetTargetFallback": true,
         "warn": true,
         "frameworkReferences": {
+          "Microsoft.AspNetCore.App": {
+            "privateAssets": "none"
+          },
           "Microsoft.NETCore.App": {
             "privateAssets": "all"
           }
         },
-        "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\9.0.302/PortableRuntimeIdentifierGraph.json"
+        "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\9.0.304/PortableRuntimeIdentifierGraph.json"
       }
     }
   }
