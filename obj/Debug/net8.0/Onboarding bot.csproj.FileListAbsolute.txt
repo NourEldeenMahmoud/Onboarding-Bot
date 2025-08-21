@@ -1,0 +1,64 @@
+E:\Nour Eldeen\Study\Self Study\Projects\Nour vs\Onboarding bot\bin\Debug\net8.0\Onboarding bot.exe
+E:\Nour Eldeen\Study\Self Study\Projects\Nour vs\Onboarding bot\bin\Debug\net8.0\Onboarding bot.deps.json
+E:\Nour Eldeen\Study\Self Study\Projects\Nour vs\Onboarding bot\bin\Debug\net8.0\Onboarding bot.runtimeconfig.json
+E:\Nour Eldeen\Study\Self Study\Projects\Nour vs\Onboarding bot\bin\Debug\net8.0\Onboarding bot.dll
+E:\Nour Eldeen\Study\Self Study\Projects\Nour vs\Onboarding bot\bin\Debug\net8.0\Onboarding bot.pdb
+E:\Nour Eldeen\Study\Self Study\Projects\Nour vs\Onboarding bot\bin\Debug\net8.0\Discord.Net.Commands.dll
+E:\Nour Eldeen\Study\Self Study\Projects\Nour vs\Onboarding bot\bin\Debug\net8.0\Discord.Net.Core.dll
+E:\Nour Eldeen\Study\Self Study\Projects\Nour vs\Onboarding bot\bin\Debug\net8.0\Discord.Net.Interactions.dll
+E:\Nour Eldeen\Study\Self Study\Projects\Nour vs\Onboarding bot\bin\Debug\net8.0\Discord.Net.Rest.dll
+E:\Nour Eldeen\Study\Self Study\Projects\Nour vs\Onboarding bot\bin\Debug\net8.0\Discord.Net.Webhook.dll
+E:\Nour Eldeen\Study\Self Study\Projects\Nour vs\Onboarding bot\bin\Debug\net8.0\Discord.Net.WebSocket.dll
+E:\Nour Eldeen\Study\Self Study\Projects\Nour vs\Onboarding bot\bin\Debug\net8.0\Microsoft.Bcl.AsyncInterfaces.dll
+E:\Nour Eldeen\Study\Self Study\Projects\Nour vs\Onboarding bot\bin\Debug\net8.0\Microsoft.Extensions.DependencyInjection.Abstractions.dll
+E:\Nour Eldeen\Study\Self Study\Projects\Nour vs\Onboarding bot\bin\Debug\net8.0\Newtonsoft.Json.dll
+E:\Nour Eldeen\Study\Self Study\Projects\Nour vs\Onboarding bot\bin\Debug\net8.0\RestSharp.dll
+E:\Nour Eldeen\Study\Self Study\Projects\Nour vs\Onboarding bot\bin\Debug\net8.0\System.Interactive.Async.dll
+E:\Nour Eldeen\Study\Self Study\Projects\Nour vs\Onboarding bot\bin\Debug\net8.0\System.Linq.Async.dll
+E:\Nour Eldeen\Study\Self Study\Projects\Nour vs\Onboarding bot\bin\Debug\net8.0\System.Reactive.dll
+E:\Nour Eldeen\Study\Self Study\Projects\Nour vs\Onboarding bot\obj\Debug\net8.0\Onboarding bot.csproj.AssemblyReference.cache
+E:\Nour Eldeen\Study\Self Study\Projects\Nour vs\Onboarding bot\obj\Debug\net8.0\Onboarding bot.GeneratedMSBuildEditorConfig.editorconfig
+E:\Nour Eldeen\Study\Self Study\Projects\Nour vs\Onboarding bot\obj\Debug\net8.0\Onboarding bot.AssemblyInfoInputs.cache
+E:\Nour Eldeen\Study\Self Study\Projects\Nour vs\Onboarding bot\obj\Debug\net8.0\Onboarding bot.AssemblyInfo.cs
+E:\Nour Eldeen\Study\Self Study\Projects\Nour vs\Onboarding bot\obj\Debug\net8.0\Onboarding bot.csproj.CoreCompileInputs.cache
+E:\Nour Eldeen\Study\Self Study\Projects\Nour vs\Onboarding bot\obj\Debug\net8.0\Onboardi.ED627E56.Up2Date
+E:\Nour Eldeen\Study\Self Study\Projects\Nour vs\Onboarding bot\obj\Debug\net8.0\Onboarding bot.dll
+E:\Nour Eldeen\Study\Self Study\Projects\Nour vs\Onboarding bot\obj\Debug\net8.0\refint\Onboarding bot.dll
+E:\Nour Eldeen\Study\Self Study\Projects\Nour vs\Onboarding bot\obj\Debug\net8.0\Onboarding bot.pdb
+E:\Nour Eldeen\Study\Self Study\Projects\Nour vs\Onboarding bot\obj\Debug\net8.0\Onboarding bot.genruntimeconfig.cache
+E:\Nour Eldeen\Study\Self Study\Projects\Nour vs\Onboarding bot\obj\Debug\net8.0\ref\Onboarding bot.dll
+E:\Nour Eldeen\Study\Self Study\GitHub\Onboarding bot\bin\Debug\net8.0\Onboarding bot.exe
+E:\Nour Eldeen\Study\Self Study\GitHub\Onboarding bot\bin\Debug\net8.0\Onboarding bot.deps.json
+E:\Nour Eldeen\Study\Self Study\GitHub\Onboarding bot\bin\Debug\net8.0\Onboarding bot.runtimeconfig.json
+E:\Nour Eldeen\Study\Self Study\GitHub\Onboarding bot\bin\Debug\net8.0\Onboarding bot.dll
+E:\Nour Eldeen\Study\Self Study\GitHub\Onboarding bot\bin\Debug\net8.0\Onboarding bot.pdb
+E:\Nour Eldeen\Study\Self Study\GitHub\Onboarding bot\bin\Debug\net8.0\Discord.Net.Commands.dll
+E:\Nour Eldeen\Study\Self Study\GitHub\Onboarding bot\bin\Debug\net8.0\Discord.Net.Core.dll
+E:\Nour Eldeen\Study\Self Study\GitHub\Onboarding bot\bin\Debug\net8.0\Discord.Net.Interactions.dll
+E:\Nour Eldeen\Study\Self Study\GitHub\Onboarding bot\bin\Debug\net8.0\Discord.Net.Rest.dll
+E:\Nour Eldeen\Study\Self Study\GitHub\Onboarding bot\bin\Debug\net8.0\Discord.Net.Webhook.dll
+E:\Nour Eldeen\Study\Self Study\GitHub\Onboarding bot\bin\Debug\net8.0\Discord.Net.WebSocket.dll
+E:\Nour Eldeen\Study\Self Study\GitHub\Onboarding bot\bin\Debug\net8.0\Microsoft.Bcl.AsyncInterfaces.dll
+E:\Nour Eldeen\Study\Self Study\GitHub\Onboarding bot\bin\Debug\net8.0\Microsoft.Extensions.DependencyInjection.Abstractions.dll
+E:\Nour Eldeen\Study\Self Study\GitHub\Onboarding bot\bin\Debug\net8.0\Newtonsoft.Json.dll
+E:\Nour Eldeen\Study\Self Study\GitHub\Onboarding bot\bin\Debug\net8.0\RestSharp.dll
+E:\Nour Eldeen\Study\Self Study\GitHub\Onboarding bot\bin\Debug\net8.0\System.Interactive.Async.dll
+E:\Nour Eldeen\Study\Self Study\GitHub\Onboarding bot\bin\Debug\net8.0\System.Linq.Async.dll
+E:\Nour Eldeen\Study\Self Study\GitHub\Onboarding bot\bin\Debug\net8.0\System.Reactive.dll
+E:\Nour Eldeen\Study\Self Study\GitHub\Onboarding bot\obj\Debug\net8.0\Onboarding bot.csproj.AssemblyReference.cache
+E:\Nour Eldeen\Study\Self Study\GitHub\Onboarding bot\obj\Debug\net8.0\Onboarding bot.GeneratedMSBuildEditorConfig.editorconfig
+E:\Nour Eldeen\Study\Self Study\GitHub\Onboarding bot\obj\Debug\net8.0\Onboarding bot.AssemblyInfoInputs.cache
+E:\Nour Eldeen\Study\Self Study\GitHub\Onboarding bot\obj\Debug\net8.0\Onboarding bot.AssemblyInfo.cs
+E:\Nour Eldeen\Study\Self Study\GitHub\Onboarding bot\obj\Debug\net8.0\Onboarding bot.csproj.CoreCompileInputs.cache
+E:\Nour Eldeen\Study\Self Study\GitHub\Onboarding bot\obj\Debug\net8.0\Onboardi.ED627E56.Up2Date
+E:\Nour Eldeen\Study\Self Study\GitHub\Onboarding bot\obj\Debug\net8.0\Onboarding bot.dll
+E:\Nour Eldeen\Study\Self Study\GitHub\Onboarding bot\obj\Debug\net8.0\refint\Onboarding bot.dll
+E:\Nour Eldeen\Study\Self Study\GitHub\Onboarding bot\obj\Debug\net8.0\Onboarding bot.pdb
+E:\Nour Eldeen\Study\Self Study\GitHub\Onboarding bot\obj\Debug\net8.0\Onboarding bot.genruntimeconfig.cache
+E:\Nour Eldeen\Study\Self Study\GitHub\Onboarding bot\obj\Debug\net8.0\ref\Onboarding bot.dll
+E:\Nour Eldeen\Study\Self Study\GitHub\Onboarding bot\bin\Debug\net8.0\DotNetEnv.dll
+E:\Nour Eldeen\Study\Self Study\GitHub\Onboarding bot\bin\Debug\net8.0\Microsoft.Extensions.Configuration.dll
+E:\Nour Eldeen\Study\Self Study\GitHub\Onboarding bot\bin\Debug\net8.0\Microsoft.Extensions.Configuration.Abstractions.dll
+E:\Nour Eldeen\Study\Self Study\GitHub\Onboarding bot\bin\Debug\net8.0\Microsoft.Extensions.Primitives.dll
+E:\Nour Eldeen\Study\Self Study\GitHub\Onboarding bot\bin\Debug\net8.0\Sprache.dll
+E:\Nour Eldeen\Study\Self Study\GitHub\Onboarding bot\bin\Debug\net8.0\.env

@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: onboarding-bot
+    env: docker
+    plan: free
+    buildCommand: docker build -t onboarding-bot .
+    startCommand: docker run -p $PORT:8080 onboarding-bot
+    envVars:
+      - key: DISCORD_TOKEN
+        sync: false
+      - key: OPENAI_KEY
+        sync: false
+      - key: PORT
+        value: 8080
+
+
+
+
