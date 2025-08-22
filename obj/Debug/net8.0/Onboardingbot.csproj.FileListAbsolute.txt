@@ -30,3 +30,7 @@ E:\Nour Eldeen\Study\Self Study\GitHub\Onboarding bot\obj\Debug\net8.0\refint\On
 E:\Nour Eldeen\Study\Self Study\GitHub\Onboarding bot\obj\Debug\net8.0\Onboardingbot.pdb
 E:\Nour Eldeen\Study\Self Study\GitHub\Onboarding bot\obj\Debug\net8.0\Onboardingbot.genruntimeconfig.cache
 E:\Nour Eldeen\Study\Self Study\GitHub\Onboarding bot\obj\Debug\net8.0\ref\Onboardingbot.dll
+E:\Nour Eldeen\Study\Self Study\GitHub\Onboarding bot\bin\Debug\net8.0\Microsoft.Extensions.Configuration.dll
+E:\Nour Eldeen\Study\Self Study\GitHub\Onboarding bot\bin\Debug\net8.0\Microsoft.Extensions.Configuration.Abstractions.dll
+E:\Nour Eldeen\Study\Self Study\GitHub\Onboarding bot\bin\Debug\net8.0\Microsoft.Extensions.DependencyInjection.Abstractions.dll
+E:\Nour Eldeen\Study\Self Study\GitHub\Onboarding bot\bin\Debug\net8.0\Microsoft.Extensions.Primitives.dll

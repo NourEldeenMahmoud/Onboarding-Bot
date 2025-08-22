@@ -11,12 +11,6 @@ using System.Linq;
 using System.Threading.Tasks;
 using Discord.Rest;
 using DotNetEnv;
-using Microsoft.AspNetCore.Builder;
-using Microsoft.AspNetCore.Hosting;
-using Microsoft.AspNetCore.Http;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Logging;
 
 class Program
 {
@@ -34,16 +28,12 @@ class Program
     private ulong associateRoleId;
     private ulong outsiderRoleId;
     private const string StoriesFile = "stories.json";
+    private const string InviteHistoryFile = "invite_history.json";
 
     static async Task Main(string[] args)
     {
         var program = new Program();
-        
-        // بدء البوت في الخلفية
-        _ = Task.Run(() => program.StartBotAsync());
-        
-        // بدء Web Application
-        await program.StartWebAppAsync(args);
+        await program.StartBotAsync();
     }
 
     public async Task StartBotAsync()
@@ -56,59 +46,6 @@ class Program
         catch (Exception ex)
         {
             Console.WriteLine($"[Bot Error] {ex}");
-        }
-    }
-
-    public async Task StartWebAppAsync(string[] args)
-    {
-        try
-        {
-            Console.WriteLine("[Web] Starting web application...");
-            
-            var builder = WebApplication.CreateBuilder(args);
-            
-            // إضافة الخدمات المطلوبة
-            builder.Services.AddLogging();
-            
-            var app = builder.Build();
-            
-            // تكوين الـ middleware
-            app.UseRouting();
-            
-            // إضافة endpoint بسيط للـ health check
-            app.MapGet("/", async context =>
-            {
-                await context.Response.WriteAsync("Bot is running!");
-            });
-            
-            // إضافة endpoint للـ health check
-            app.MapGet("/health", async context =>
-            {
-                string botStatus;
-                if (_client == null)
-                {
-                    botStatus = "Not Initialized";
-                }
-                else if (_client.ConnectionState == ConnectionState.Connected)
-                {
-                    botStatus = "Connected";
-                }
-                else
-                {
-                    botStatus = $"Disconnected ({_client.ConnectionState})";
-                }
-                await context.Response.WriteAsync($"Bot Status: {botStatus}");
-            });
-            
-            // بدء التطبيق على أي port متاح
-            var port = Environment.GetEnvironmentVariable("PORT") ?? "8080";
-            Console.WriteLine($"[Web] Starting web app on port {port}");
-            
-            await app.RunAsync($"http://0.0.0.0:{port}");
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"[Web Error] {ex}");
         }
     }
 
@@ -247,18 +184,33 @@ class Program
             var invitesAfter = await guild.GetInvitesAsync();
 
             RestInviteMetadata usedInvite = null;
+            Console.WriteLine($"[Invite Detection] Checking invites for user {user.Username}...");
+            
             foreach (var invite in invitesAfter)
             {
                 var previousUses = _inviteUses.ContainsKey(invite.Code) ? _inviteUses[invite.Code] : 0;
-                if ((invite.Uses ?? 0) > previousUses)
+                var currentUses = invite.Uses ?? 0;
+                
+                Console.WriteLine($"[Invite Detection] Invite {invite.Code} by {invite.Inviter?.Username ?? "Unknown"}: Previous={previousUses}, Current={currentUses}");
+                
+                if (currentUses > previousUses)
                 {
                     usedInvite = invite;
+                    Console.WriteLine($"[Invite Detection] Found used invite: {invite.Code} by {invite.Inviter?.Username ?? "Unknown"}");
                     break;
                 }
             }
 
+            // Update invite uses tracking
             foreach (var invite in invitesAfter)
+            {
                 _inviteUses[invite.Code] = invite.Uses ?? 0;
+            }
+            
+            if (usedInvite == null)
+            {
+                Console.WriteLine($"[Invite Detection] No invite found for user {user.Username} - they may have joined without an invite");
+            }
 
             // Check if user joined without invite
             bool hasInviter = usedInvite?.Inviter != null;
@@ -273,6 +225,17 @@ class Program
                 .FirstOrDefault()?.Name ?? "بدون رول" : "بدون رول";
 
             string inviterStory = hasInviter ? LoadStory(inviterId) : "";
+
+            // Log invite information for debugging
+            Console.WriteLine($"[Invite Info] User {user.Username} joined via invite:");
+            Console.WriteLine($"[Invite Info] - Has Inviter: {hasInviter}");
+            Console.WriteLine($"[Invite Info] - Inviter Name: {inviterName}");
+            Console.WriteLine($"[Invite Info] - Inviter ID: {inviterId}");
+            Console.WriteLine($"[Invite Info] - Inviter Role: {inviterRole}");
+            Console.WriteLine($"[Invite Info] - Used Invite Code: {usedInvite?.Code ?? "Unknown"}");
+
+            // Save invite information to history
+            SaveInviteHistory(user.Id, inviterName, inviterId, usedInvite?.Code ?? "Unknown", DateTime.Now);
 
             // التحقق من وجود قصة مسبقة للمستخدم
             string existingStory = LoadStory(user.Id);
@@ -294,6 +257,16 @@ class Program
                 {
                     Console.WriteLine($"[Warning] Could not send welcome back DM to {user.Username}: {ex.Message}");
                 }
+
+                // إرسال رسالة ترحيب في قناة Join the Family للعضو القديم
+                var joinChannel = _client?.GetChannel(joinFamilyChannelId) as ITextChannel;
+                if (joinChannel != null)
+                {
+                    await SendMessageToJoinChannel(joinChannel, user, $"🎭 **مرحباً بعودتك {user.Username}!**\n\n" +
+                                                                      "أنت عضو قديم في العائلة ولديك قصة مسجلة بالفعل! 📖\n" +
+                                                                      "لا تحتاج لإعادة عملية التسجيل.\n\n" +
+                                                                      "أهلاً بعودتك لعالم **The Underworld**! 🌃");
+                }
                 
                 // إعطاء المستخدم رول Associate إذا كان متوفر (لأنه عضو قديم)
                 if (associateRoleId != 0)
@@ -309,9 +282,9 @@ class Program
                 return; // إنهاء العملية هنا
             }
 
-            // الحصول على قناة Join the Family
-            var joinChannel = _client?.GetChannel(joinFamilyChannelId) as ITextChannel;
-            if (joinChannel == null)
+            // الحصول على قناة Join the Family للأعضاء الجدد
+            var newMemberJoinChannel = _client?.GetChannel(joinFamilyChannelId) as ITextChannel;
+            if (newMemberJoinChannel == null)
             {
                 Console.WriteLine("[Warning] Join Family channel not found, onboarding cancelled");
                 await LogError("Join Channel Error", "Join Family channel not found", $"User {user.Username} could not be onboarded");
@@ -322,59 +295,59 @@ class Program
             Console.WriteLine($"[Info] Starting onboarding process for new member {user.Username}");
             
             // إعطاء المستخدم صلاحية الكتابة في القناة
-            await GiveUserWritePermission(joinChannel, user);
+            await GiveUserWritePermission(newMemberJoinChannel, user);
             
-            await SendWelcomeToChannel(joinChannel, user, hasInviter);
+            await SendWelcomeToChannel(newMemberJoinChannel, user, hasInviter, inviterName, inviterRole);
             
             // انتظار قليل ليقرأ التعريف
             await Task.Delay(3000);
 
-            string name = await AskQuestionInChannel(joinChannel, user, "اسمك الحقيقي ايه؟");
+            string name = await AskQuestionInChannel(newMemberJoinChannel, user, "اسمك الحقيقي ايه؟");
             if (name == "لم يتم الرد في الوقت المحدد") 
             {
-                await RemoveUserWritePermission(joinChannel, user);
+                await RemoveUserWritePermission(newMemberJoinChannel, user);
                 return;
             }
 
-            string age = await AskQuestionInChannel(joinChannel, user, "سنك كام؟");
+            string age = await AskQuestionInChannel(newMemberJoinChannel, user, "سنك كام؟");
             if (age == "لم يتم الرد في الوقت المحدد") 
             {
-                await RemoveUserWritePermission(joinChannel, user);
+                await RemoveUserWritePermission(newMemberJoinChannel, user);
                 return;
             }
 
-            string interest = await AskQuestionInChannel(joinChannel, user, "داخل السرفر ليه؟");
+            string interest = await AskQuestionInChannel(newMemberJoinChannel, user, "داخل السرفر ليه؟");
             if (interest == "لم يتم الرد في الوقت المحدد") 
             {
-                await RemoveUserWritePermission(joinChannel, user);
+                await RemoveUserWritePermission(newMemberJoinChannel, user);
                 return;
             }
 
-            string specialty = await AskQuestionInChannel(joinChannel, user, "تخصصك أو شغفك؟");
+            string specialty = await AskQuestionInChannel(newMemberJoinChannel, user, "تخصصك أو شغفك؟");
             if (specialty == "لم يتم الرد في الوقت المحدد") 
             {
-                await RemoveUserWritePermission(joinChannel, user);
+                await RemoveUserWritePermission(newMemberJoinChannel, user);
                 return;
             }
 
-            string strength = await AskQuestionInChannel(joinChannel, user, "أهم ميزة عندك؟");
+            string strength = await AskQuestionInChannel(newMemberJoinChannel, user, "أهم ميزة عندك؟");
             if (strength == "لم يتم الرد في الوقت المحدد") 
             {
-                await RemoveUserWritePermission(joinChannel, user);
+                await RemoveUserWritePermission(newMemberJoinChannel, user);
                 return;
             }
 
-            string weakness = await AskQuestionInChannel(joinChannel, user, "أكبر عيب عندك؟");
+            string weakness = await AskQuestionInChannel(newMemberJoinChannel, user, "أكبر عيب عندك؟");
             if (weakness == "لم يتم الرد في الوقت المحدد") 
             {
-                await RemoveUserWritePermission(joinChannel, user);
+                await RemoveUserWritePermission(newMemberJoinChannel, user);
                 return;
             }
 
-            string favoritePlace = await AskQuestionInChannel(joinChannel, user, "مكان بتحبه تروح له؟");
+            string favoritePlace = await AskQuestionInChannel(newMemberJoinChannel, user, "مكان بتحبه تروح له؟");
             if (favoritePlace == "لم يتم الرد في الوقت المحدد") 
             {
-                await RemoveUserWritePermission(joinChannel, user);
+                await RemoveUserWritePermission(newMemberJoinChannel, user);
                 return;
             }
 
@@ -400,11 +373,11 @@ class Program
                 if (associateRoleId != 0)
                 {
                     await AssignRole(user, associateRoleId, "Associate");
-                    await SendMessageToJoinChannel(joinChannel, user, "🎉 مبروك! اخدت رول **Associate** عشان جاوبت على كل الأسئلة!");
+                    await SendMessageToJoinChannel(newMemberJoinChannel, user, "🎉 مبروك! اخدت رول **Associate** عشان جاوبت على كل الأسئلة!");
                 }
                 else
                 {
-                    await SendMessageToJoinChannel(joinChannel, user, "🎉 مبروك! جاوبت على كل الأسئلة! (رول Associate غير مُعد في التكوين)");
+                    await SendMessageToJoinChannel(newMemberJoinChannel, user, "🎉 مبروك! جاوبت على كل الأسئلة! (رول Associate غير مُعد في التكوين)");
                     Console.WriteLine("[Warning] Associate role assignment skipped - role ID not configured");
                 }
             }
@@ -413,11 +386,11 @@ class Program
                 if (outsiderRoleId != 0)
                 {
                     await AssignRole(user, outsiderRoleId, "Outsider");
-                    await SendMessageToJoinChannel(joinChannel, user, "⚠️ اخدت رول **Outsider** عشان ما جاوبتش على كل الأسئلة.");
+                    await SendMessageToJoinChannel(newMemberJoinChannel, user, "⚠️ اخدت رول **Outsider** عشان ما جاوبتش على كل الأسئلة.");
                 }
                 else
                 {
-                    await SendMessageToJoinChannel(joinChannel, user, "⚠️ ما جاوبتش على كل الأسئلة. (رول Outsider غير مُعد في التكوين)");
+                    await SendMessageToJoinChannel(newMemberJoinChannel, user, "⚠️ ما جاوبتش على كل الأسئلة. (رول Outsider غير مُعد في التكوين)");
                     Console.WriteLine("[Warning] Outsider role assignment skipped - role ID not configured");
                 }
             }
@@ -434,14 +407,15 @@ class Program
                 var storyChannel = _client?.GetChannel(storyChannelId) as IMessageChannel;
                 if (storyChannel != null)
                 {
-                    if (hasInviter)
-                    {
-                        await SendMessageSafe(storyChannel, $"🤝 {user.Mention} مرحباً بك في العائلة!\n{story}");
-                    }
-                    else
-                    {
-                        await SendMessageSafe(storyChannel, $"👤 {user.Mention} شخص مجهول انضم!\n{story}");
-                    }
+                    // إنشاء Embed منسق للقصة في قناة القصص
+                    var storyEmbed = new EmbedBuilder()
+                        .WithColor(hasInviter ? new Color(0x00ff00) : new Color(0xff6b35)) // أخضر للمدعوين، برتقالي للمجهولين
+                        .WithAuthor("📜🎭 قصة العضو", iconUrl: user.GetAvatarUrl())
+                        .WithTitle(ExtractStoryTitle(story))
+                        .WithDescription(story)
+                        .Build();
+
+                    await storyChannel.SendMessageAsync(text: user.Mention, embed: storyEmbed);
                     Console.WriteLine("[Info] Story posted to channel successfully.");
                 }
                 else
@@ -455,10 +429,10 @@ class Program
             }
 
             // إرسال رسالة توجيهية للمستخدم مع رابط القصة
-            await SendStoryCompletionMessage(joinChannel, user, story);
+            await SendStoryCompletionMessage(newMemberJoinChannel, user, story);
 
             // إزالة صلاحية الكتابة من المستخدم
-            await RemoveUserWritePermission(joinChannel, user);
+            await RemoveUserWritePermission(newMemberJoinChannel, user);
             
             Console.WriteLine("[Info] Story sent to join channel and story channel successfully.");
         }
@@ -522,7 +496,7 @@ class Program
         }
     }
 
-    private async Task SendWelcomeToChannel(ITextChannel channel, SocketGuildUser user, bool hasInviter)
+    private async Task SendWelcomeToChannel(ITextChannel channel, SocketGuildUser user, bool hasInviter, string inviterName = "", string inviterRole = "")
     {
         try
         {
@@ -542,7 +516,7 @@ class Program
 • عندك **5 دقايق** للرد على كل سؤال لو ما ردتش في الوقت، هوقف العملية
 • مش لازم الاجابه تكون نموذجية او حقيقية 100% خليك كيرييتف
 
-{(hasInviter ? "🤝 **أنت مدعو من عضو في العائلة** - دي نقطة في صالحك!" : "👤 **انت دخلت بدون دعوة** - لكن ممكن تثبت نفسك!")}
+{(hasInviter ? $"🤝 **أنت مدعو من {inviterName} ({inviterRole})** - دي نقطة في صالحك!" : "👤 **انت دخلت بدون دعوة** - لكن ممكن تثبت نفسك!")}
 
 استعد للانضمام لعالم **The Underworld**! 🌃
 
@@ -558,41 +532,7 @@ class Program
         }
     }
 
-    private async Task SendBotIntroduction(IDMChannel dm, string username, bool hasInviter)
-    {
-        try
-        {
-            var introMessage = $@"🎭 **أهلاً وسهلاً {username}!**
 
-أنا **BitMob Bot** 🤖، مرحباً بك في عالم **The Underworld** - عالم المافيا والبرمجة!
-
-🌟 ** أنا مين ؟**
-• المساعد الشخصي في السيرفر
-• منشئ القصص الملحمية باستخدام الذكاء الاصطناعي
-• حارس أسرار العائلة وكاتب تاريخها
-
-🎯 **بعمل ايه هنا؟**
-• هسالك شوية اساله بسيطه عشان اتعرف عليك واعملك قصة تناسبك عشان الناس تعرفك واديلك role في العائلة
-
-⚠️ **مهم جداً:**
-• عندك دقيقة واحدة للرد على كل سؤال لو ما ردتش في الوقت، هوقف العملية
-• مش لازم الاجابه تكون نموذجية او حقيقية 100% خليك كيرييتف 
-
-{(hasInviter ? "🤝 **أنت مدعو من عضو في العائلة** - دي نقطة في صالحك!" : "👤 **انت دخلت بدون دعوة** - لكن ممكن تثبت نفسك!")}
-
-استعد للانضمام لعالم **The Underworld**! 🌃
-
----
-**هنبدأ بالأسئلة دلوقتي...**";
-
-            await dm.SendMessageAsync(introMessage);
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine("[Bot Introduction Error] " + ex.Message);
-            await LogError("Bot Introduction Error", ex.Message, "Failed to send bot introduction");
-        }
-    }
 
     private async Task LogError(string errorType, string errorMessage, string context = "")
     {
@@ -666,19 +606,7 @@ class Program
         return response;
     }
 
-    private async Task<string> AskQuestion(IDMChannel dm, string question)
-    {
-        await SendDM(dm, question);
-        var response = await WaitForUserResponse(dm);
-        
-        // إذا لم يرد المستخدم، أرسل رسالة إيقاف
-        if (response == "لم يتم الرد في الوقت المحدد")
-        {
-            await SendDM(dm, "⏰ انتهى الوقت المحدد للرد. سيتم إيقاف عملية التسجيل.");
-        }
-        
-        return response;
-    }
+
 
     private async Task<string> WaitForUserResponseInChannel(ITextChannel channel, SocketGuildUser user, int timeoutSeconds = 300) // 5 دقايق
     {
@@ -716,41 +644,7 @@ class Program
         }
     }
 
-    private async Task<string> WaitForUserResponse(IDMChannel dm, int timeoutSeconds = 60)
-    {
-        var tcs = new TaskCompletionSource<string>();
 
-        Task Handler(SocketMessage msg)
-        {
-            if (msg.Channel.Id == dm.Id && !msg.Author.IsBot)
-                tcs.TrySetResult(msg.Content);
-            return Task.CompletedTask;
-        }
-
-        if (_client != null)
-        {
-            _client.MessageReceived += Handler;
-        }
-
-        var resultTask = tcs.Task;
-        if (await Task.WhenAny(resultTask, Task.Delay(timeoutSeconds * 1000)) == resultTask)
-        {
-            if (_client != null)
-            {
-                _client.MessageReceived -= Handler;
-            }
-            return resultTask.Result;
-        }
-        else
-        {
-            if (_client != null)
-            {
-                _client.MessageReceived -= Handler;
-            }
-            Console.WriteLine("[Timeout] User did not respond in time.");
-            return "لم يتم الرد في الوقت المحدد";
-        }
-    }
 
     private async Task GiveUserWritePermission(ITextChannel channel, SocketGuildUser user)
     {
@@ -791,21 +685,34 @@ class Program
         {
             string storyLink = $"https://discord.com/channels/{user.Guild?.Id}/{storyChannelId}";
             
-            var embed = new EmbedBuilder()
-                .WithColor(0x00ff00) // لون أخضر للنجاح
+            // إنشاء Embed منسق للقصة
+            var storyEmbed = new EmbedBuilder()
+                .WithColor(new Color(0x00ff00)) // لون أخضر
+                .WithAuthor("📜🎭 قصة العضو", iconUrl: user.GetAvatarUrl())
+                .WithTitle(ExtractStoryTitle(story))
+                .WithDescription(story)
+                .Build();
+
+            // إنشاء Embed منفصل للرسالة التوجيهية
+            var infoEmbed = new EmbedBuilder()
+                .WithColor(new Color(0x00ff00))
                 .WithTitle("🎉 مبروك! تم إنشاء قصتك بنجاح!")
                 .WithDescription($"**مرحباً {user.Username}!**\n\n" +
                                $"تم إنشاء قصتك بنجاح وتم حفظها في قاعدة بيانات العائلة! 📖\n\n" +
                                $"**اقرأ قصتك هنا:**\n" +
                                $"🔗 {storyLink}\n\n" +
                                $"**أو اذهب إلى تشانل القصص مباشرة**")
-                .AddField("🎭 قصة العضو", story.Length > 1024 ? story.Substring(0, 1021) + "..." : story)
                 .WithFooter($"تم إنشاء القصة في {DateTime.Now:dd/MM/yyyy HH:mm}")
                 .WithTimestamp(DateTimeOffset.Now)
                 .Build();
 
             var allowedUsers = new List<ulong> { ownerId, user.Id };
-            await channel.SendMessageAsync(text: user.Mention, embed: embed, allowedMentions: new AllowedMentions { UserIds = allowedUsers });
+            
+            // إرسال القصة أولاً
+            await channel.SendMessageAsync(text: user.Mention, embed: storyEmbed, allowedMentions: new AllowedMentions { UserIds = allowedUsers });
+            
+            // إرسال الرسالة التوجيهية
+            await channel.SendMessageAsync(embed: infoEmbed);
             
             Console.WriteLine($"[Info] Story completion message sent to {user.Username}");
         }
@@ -814,6 +721,23 @@ class Program
             Console.WriteLine($"[Error] Failed to send story completion message: {ex.Message}");
             await LogError("Story Completion Error", ex.Message, $"Failed to send story completion message to {user.Username}");
         }
+    }
+
+    private string ExtractStoryTitle(string story)
+    {
+        // محاولة استخراج عنوان القصة من أول سطر
+        var lines = story.Split('\n');
+        if (lines.Length > 0)
+        {
+            var firstLine = lines[0].Trim();
+            // إزالة العلامات مثل ** أو # أو أي تنسيق
+            firstLine = firstLine.Replace("**", "").Replace("#", "").Replace("*", "").Trim();
+            if (firstLine.Length > 0 && firstLine.Length <= 100)
+            {
+                return firstLine;
+            }
+        }
+        return "قصة العضو";
     }
 
     private async Task SendMessageToJoinChannel(ITextChannel channel, SocketGuildUser user, string message)
@@ -1000,6 +924,50 @@ Hidden Docks، Tech Lab، Abandoned Warehouse، والمزيد.
         }
     }
 
+    private void SaveInviteHistory(ulong userId, string inviterName, ulong inviterId, string inviteCode, DateTime joinDate)
+    {
+        try
+        {
+            var inviteHistory = File.Exists(InviteHistoryFile)
+                ? JsonConvert.DeserializeObject<Dictionary<ulong, InviteInfo>>(File.ReadAllText(InviteHistoryFile))
+                : new Dictionary<ulong, InviteInfo>();
+
+            inviteHistory[userId] = new InviteInfo
+            {
+                InviterName = inviterName,
+                InviterId = inviterId,
+                InviteCode = inviteCode,
+                JoinDate = joinDate
+            };
+
+            File.WriteAllText(InviteHistoryFile, JsonConvert.SerializeObject(inviteHistory, Formatting.Indented));
+            Console.WriteLine($"[Invite History] Saved invite info for user {userId}: {inviterName} via {inviteCode}");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[SaveInviteHistory Error] {ex}");
+        }
+    }
+
+    private InviteInfo LoadInviteHistory(ulong userId)
+    {
+        try
+        {
+            if (!File.Exists(InviteHistoryFile)) return null;
+            
+            var jsonContent = File.ReadAllText(InviteHistoryFile);
+            if (string.IsNullOrEmpty(jsonContent)) return null;
+            
+            var inviteHistory = JsonConvert.DeserializeObject<Dictionary<ulong, InviteInfo>>(jsonContent) ?? new Dictionary<ulong, InviteInfo>();
+            return inviteHistory.ContainsKey(userId) ? inviteHistory[userId] : null;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[LoadInviteHistory Error] {ex}");
+            return null;
+        }
+    }
+
     private string LoadStory(ulong userId)
     {
         try
@@ -1122,26 +1090,97 @@ public class StoryCommands : InteractionModuleBase<SocketInteractionContext>
                 return;
             }
 
-            // Split story if it's too long
-            if (story.Length > 2000)
-            {
-                var chunks = SplitMessage(story, 2000);
-                await FollowupAsync($"📖 **قصة {user.Username}**\n{chunks[0]}");
-                
-                for (int i = 1; i < chunks.Length; i++)
-                {
-                    await Context.Channel.SendMessageAsync(chunks[i]);
-                }
-            }
-            else
-            {
-                await FollowupAsync($"📖 **قصة {user.Username}**\n{story}");
-            }
+            // إنشاء Embed منسق للقصة
+            var storyEmbed = new EmbedBuilder()
+                .WithColor(new Color(0x00ff00))
+                .WithAuthor("📜🎭 قصة العضو", iconUrl: user.GetAvatarUrl())
+                .WithTitle(ExtractStoryTitle(story))
+                .WithDescription(story)
+                .Build();
+
+            await FollowupAsync(embed: storyEmbed);
         }
         catch (Exception ex)
         {
             Console.WriteLine($"[Story Command Error] {ex}");
             await FollowupAsync("❌ حدث خطأ أثناء عرض القصة");
+        }
+    }
+
+    private string ExtractStoryTitle(string story)
+    {
+        // محاولة استخراج عنوان القصة من أول سطر
+        var lines = story.Split('\n');
+        if (lines.Length > 0)
+        {
+            var firstLine = lines[0].Trim();
+            // إزالة العلامات مثل ** أو # أو أي تنسيق
+            firstLine = firstLine.Replace("**", "").Replace("#", "").Replace("*", "").Trim();
+            if (firstLine.Length > 0 && firstLine.Length <= 100)
+            {
+                return firstLine;
+            }
+        }
+        return "قصة العضو";
+    }
+
+    [SlashCommand("invite", "عرض معلومات الدعوة لعضو معين")]
+    public async Task ShowInviteInfo([Summary("user", "العضو الذي تريد معرفة من دعاه")] SocketUser user)
+    {
+        try
+        {
+            await DeferAsync();
+
+            var guild = Context.Guild;
+            if (guild == null)
+            {
+                await FollowupAsync("❌ هذا الأمر متاح فقط في السيرفرات");
+                return;
+            }
+
+            // Get user's join date
+            var guildUser = guild.GetUser(user.Id);
+            if (guildUser == null)
+            {
+                await FollowupAsync($"❌ {user.Mention} غير موجود في هذا السيرفر");
+                return;
+            }
+
+            var joinDate = guildUser.JoinedAt?.ToString("dd/MM/yyyy HH:mm") ?? "غير معروف";
+            
+            // Try to get invite information from saved history first
+            string inviterInfo = "غير معروف";
+            string inviteCode = "غير معروف";
+            
+            var inviteHistory = LoadInviteHistory(user.Id);
+            if (inviteHistory != null)
+            {
+                inviterInfo = inviteHistory.InviterName;
+                inviteCode = inviteHistory.InviteCode;
+            }
+            else
+            {
+                // لا توجد معلومات محفوظة عن الدعوة
+                inviterInfo = "غير معروف (لا توجد معلومات محفوظة)";
+            }
+
+            var embed = new EmbedBuilder()
+                .WithColor(0x00ff00)
+                .WithTitle($"📋 معلومات انضمام {user.Username}")
+                .AddField("👤 العضو", user.Mention, true)
+                .AddField("📅 تاريخ الانضمام", joinDate, true)
+                .AddField("🤝 من دعاه", inviterInfo, true)
+                .AddField("🔗 كود الدعوة", inviteCode, true)
+                .WithThumbnailUrl(user.GetAvatarUrl())
+                .WithTimestamp(DateTimeOffset.Now)
+                .Build();
+
+            await FollowupAsync(embed: embed);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[Invite Command Error] {ex}");
+            await FollowupAsync("❌ حدث خطأ أثناء عرض معلومات الدعوة");
         }
     }
 
@@ -1164,6 +1203,26 @@ public class StoryCommands : InteractionModuleBase<SocketInteractionContext>
         }
     }
 
+    private InviteInfo LoadInviteHistory(ulong userId)
+    {
+        try
+        {
+            const string InviteHistoryFile = "invite_history.json";
+            if (!File.Exists(InviteHistoryFile)) return null;
+            
+            var jsonContent = File.ReadAllText(InviteHistoryFile);
+            if (string.IsNullOrEmpty(jsonContent)) return null;
+            
+            var inviteHistory = JsonConvert.DeserializeObject<Dictionary<ulong, InviteInfo>>(jsonContent) ?? new Dictionary<ulong, InviteInfo>();
+            return inviteHistory.ContainsKey(userId) ? inviteHistory[userId] : null;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[LoadInviteHistory Error] {ex}");
+            return null;
+        }
+    }
+
     private string[] SplitMessage(string message, int maxLength)
     {
         var chunks = new List<string>();
@@ -1173,4 +1232,13 @@ public class StoryCommands : InteractionModuleBase<SocketInteractionContext>
         }
         return chunks.ToArray();
     }
+}
+
+// Invite Information Class
+public class InviteInfo
+{
+    public string InviterName { get; set; } = "";
+    public ulong InviterId { get; set; }
+    public string InviteCode { get; set; } = "";
+    public DateTime JoinDate { get; set; }
 }
