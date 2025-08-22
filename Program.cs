@@ -440,15 +440,30 @@ class Program
                 var storyChannel = _client?.GetChannel(storyChannelId) as IMessageChannel;
                 if (storyChannel != null)
                 {
+                    // تحديد لون الـ Embed بناءً على وجود الدعوة
+                    Color embedColor;
+                    if (hasInviter)
+                    {
+                        embedColor = new Color(0x00ff00); // أخضر 🟩 للمدعوين
+                        Console.WriteLine($"[Info] User {user.Username} joined via invite - using green color");
+                    }
+                    else
+                    {
+                        embedColor = new Color(0xff6b35); // برتقالي 🟧 للمجهولين
+                        Console.WriteLine($"[Info] User {user.Username} joined without invite - using orange color");
+                    }
+
                     // إنشاء Embed منسق للقصة في قناة القصص
                     var storyEmbed = new EmbedBuilder()
-                        .WithColor(hasInviter ? new Color(0x00ff00) : new Color(0xff6b35)) // أخضر للمدعوين، برتقالي للمجهولين
+                        .WithColor(embedColor)
                         .WithAuthor("📜🎭 قصة العضو", iconUrl: user.GetAvatarUrl())
                         .WithTitle(ExtractStoryTitle(story))
                         .WithDescription(story)
+                        .WithFooter($"تم إنشاء القصة في {DateTime.Now:dd/MM/yyyy HH:mm}")
+                        .WithTimestamp(DateTimeOffset.Now)
                         .Build();
 
-                    await storyChannel.SendMessageAsync(text: user.Mention, embed: storyEmbed);
+                    await storyChannel.SendMessageAsync(embed: storyEmbed);
                     Console.WriteLine("[Info] Story posted to channel successfully.");
                 }
                 else
@@ -461,6 +476,9 @@ class Program
                 Console.WriteLine("[Info] Story channel not configured - skipping channel posting.");
             }
 
+            // إرسال رابط القصة مرة واحدة فقط
+            await SendStoryCompletionMessage(newMemberJoinChannel, user, story);
+            
             // إزالة صلاحية الكتابة من المستخدم
             await RemoveUserWritePermission(newMemberJoinChannel, user);
             
@@ -695,10 +713,16 @@ class Program
     {
         try
         {
-            // حذف رسائل الأسئلة والردود (آخر 20 رسالة)
-            var messages = await channel.GetMessagesAsync(20).FlattenAsync();
+            // حذف رسائل الأسئلة والردود (آخر 50 رسالة للتأكد من حذف كل شيء)
+            var messages = await channel.GetMessagesAsync(50).FlattenAsync();
             var messagesToDelete = messages.Where(m => 
-                (m.Author.Id == _client?.CurrentUser?.Id && m.Content.Contains("💬 **سؤال:**")) ||
+                (m.Author.Id == _client?.CurrentUser?.Id && (
+                    m.Content.Contains("💬 **سؤال:**") ||
+                    m.Content.Contains("🎭 **أهلاً وسهلاً") ||
+                    m.Content.Contains("🎉 مبروك!") ||
+                    m.Content.Contains("⚠️ اخدت رول") ||
+                    m.Content.Contains("⏰ انتهى الوقت")
+                )) ||
                 (m.Author.Id == user.Id && !m.Author.IsBot)
             ).ToList();
 
@@ -739,6 +763,9 @@ class Program
             await channel.SendMessageAsync(text: user.Mention, embed: infoEmbed, allowedMentions: new AllowedMentions { UserIds = allowedUsers });
             
             Console.WriteLine($"[Info] Story completion message sent to {user.Username}");
+            
+            // انتظار قليل قبل حذف الرسائل
+            await Task.Delay(2000);
         }
         catch (Exception ex)
         {
