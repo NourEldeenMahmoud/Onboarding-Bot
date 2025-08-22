@@ -283,14 +283,22 @@ class Program
                 
 
 
-                // إرسال رسالة ترحيب في قناة Join the Family للعضو القديم
-                var joinChannel = _client?.GetChannel(joinFamilyChannelId) as ITextChannel;
-                if (joinChannel != null)
+                // إرسال رسالة ترحيب في قناة القصص للعضو القديم
+                var storyChannel = _client?.GetChannel(storyChannelId) as IMessageChannel;
+                if (storyChannel != null)
                 {
-                    await SendMessageToJoinChannel(joinChannel, user, $"🎭 **مرحباً بعودتك {user.Username}!**\n\n" +
-                                                                      "أنت عضو قديم في العائلة ولديك قصة مسجلة بالفعل! 📖\n" +
-                                                                      "لا تحتاج لإعادة عملية التسجيل.\n\n" +
-                                                                      "أهلاً بعودتك لعالم **The Underworld**! 🌃");
+                    var welcomeBackEmbed = new EmbedBuilder()
+                        .WithColor(new Color(0x00ff00)) // لون أخضر
+                        .WithAuthor("🎭 مرحباً بعودتك!", iconUrl: user.GetAvatarUrl())
+                        .WithTitle($"مرحباً بعودتك {user.Username}!")
+                        .WithDescription("أنت عضو قديم في العائلة ولديك قصة مسجلة بالفعل! 📖\n" +
+                                       "لا تحتاج لإعادة عملية التسجيل.\n\n" +
+                                       "أهلاً بعودتك لعالم **The Underworld**! 🌃")
+                        .WithFooter($"تاريخ العودة: {DateTime.Now:dd/MM/yyyy HH:mm}")
+                        .WithTimestamp(DateTimeOffset.Now)
+                        .Build();
+
+                    await storyChannel.SendMessageAsync(text: user.Mention, embed: welcomeBackEmbed);
                 }
                 
                 // إعطاء المستخدم رول Associate إذا كان متوفر (لأنه عضو قديم)
