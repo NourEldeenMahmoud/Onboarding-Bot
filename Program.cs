@@ -274,6 +274,41 @@ class Program
 
             string inviterStory = hasInviter ? LoadStory(inviterId) : "";
 
+            // التحقق من وجود قصة مسبقة للمستخدم
+            string existingStory = LoadStory(user.Id);
+            if (!string.IsNullOrEmpty(existingStory))
+            {
+                Console.WriteLine($"[Info] User {user.Username} already has a story, skipping onboarding");
+                
+                // إرسال رسالة ترحيب للمستخدم القديم
+                try
+                {
+                    var dm = await user.CreateDMChannelAsync();
+                    await SendDM(dm, $"🎭 **مرحباً بعودتك {user.Username}!**\n\n" +
+                                      "أنت عضو قديم في العائلة ولديك قصة مسجلة بالفعل! 📖\n" +
+                                      "لا تحتاج لإعادة عملية التسجيل.\n\n" +
+                                      "استخدم الأمر `/story @{user.Username}` لعرض قصتك.\n\n" +
+                                      "أهلاً بعودتك لعالم **The Underworld**! 🌃");
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"[Warning] Could not send welcome back DM to {user.Username}: {ex.Message}");
+                }
+                
+                // إعطاء المستخدم رول Associate إذا كان متوفر (لأنه عضو قديم)
+                if (associateRoleId != 0)
+                {
+                    await AssignRole(user, associateRoleId, "Associate");
+                    Console.WriteLine($"[Info] Assigned Associate role to returning member {user.Username}");
+                }
+                else
+                {
+                    Console.WriteLine($"[Warning] Could not assign Associate role to returning member {user.Username} - role not configured");
+                }
+                
+                return; // إنهاء العملية هنا
+            }
+
             // الحصول على قناة Join the Family
             var joinChannel = _client?.GetChannel(joinFamilyChannelId) as ITextChannel;
             if (joinChannel == null)
@@ -283,32 +318,65 @@ class Program
                 return;
             }
 
-            // بدء عملية الأسئلة في القناة
+            // بدء عملية الأسئلة في القناة للأعضاء الجدد فقط
+            Console.WriteLine($"[Info] Starting onboarding process for new member {user.Username}");
+            
+            // إعطاء المستخدم صلاحية الكتابة في القناة
+            await GiveUserWritePermission(joinChannel, user);
+            
             await SendWelcomeToChannel(joinChannel, user, hasInviter);
             
             // انتظار قليل ليقرأ التعريف
             await Task.Delay(3000);
 
             string name = await AskQuestionInChannel(joinChannel, user, "اسمك الحقيقي ايه؟");
-            if (name == "لم يتم الرد في الوقت المحدد") return;
+            if (name == "لم يتم الرد في الوقت المحدد") 
+            {
+                await RemoveUserWritePermission(joinChannel, user);
+                return;
+            }
 
             string age = await AskQuestionInChannel(joinChannel, user, "سنك كام؟");
-            if (age == "لم يتم الرد في الوقت المحدد") return;
+            if (age == "لم يتم الرد في الوقت المحدد") 
+            {
+                await RemoveUserWritePermission(joinChannel, user);
+                return;
+            }
 
             string interest = await AskQuestionInChannel(joinChannel, user, "داخل السرفر ليه؟");
-            if (interest == "لم يتم الرد في الوقت المحدد") return;
+            if (interest == "لم يتم الرد في الوقت المحدد") 
+            {
+                await RemoveUserWritePermission(joinChannel, user);
+                return;
+            }
 
             string specialty = await AskQuestionInChannel(joinChannel, user, "تخصصك أو شغفك؟");
-            if (specialty == "لم يتم الرد في الوقت المحدد") return;
+            if (specialty == "لم يتم الرد في الوقت المحدد") 
+            {
+                await RemoveUserWritePermission(joinChannel, user);
+                return;
+            }
 
             string strength = await AskQuestionInChannel(joinChannel, user, "أهم ميزة عندك؟");
-            if (strength == "لم يتم الرد في الوقت المحدد") return;
+            if (strength == "لم يتم الرد في الوقت المحدد") 
+            {
+                await RemoveUserWritePermission(joinChannel, user);
+                return;
+            }
 
             string weakness = await AskQuestionInChannel(joinChannel, user, "أكبر عيب عندك؟");
-            if (weakness == "لم يتم الرد في الوقت المحدد") return;
+            if (weakness == "لم يتم الرد في الوقت المحدد") 
+            {
+                await RemoveUserWritePermission(joinChannel, user);
+                return;
+            }
 
             string favoritePlace = await AskQuestionInChannel(joinChannel, user, "مكان بتحبه تروح له؟");
-            if (favoritePlace == "لم يتم الرد في الوقت المحدد") return;
+            if (favoritePlace == "لم يتم الرد في الوقت المحدد") 
+            {
+                await RemoveUserWritePermission(joinChannel, user);
+                return;
+            }
 
             // Check if user answered all questions
             bool answeredAllQuestions = !string.IsNullOrWhiteSpace(name) && 
@@ -386,7 +454,12 @@ class Program
                 Console.WriteLine("[Info] Story channel not configured - skipping channel posting.");
             }
 
-            await SendMessageToJoinChannel(joinChannel, user, story);
+            // إرسال رسالة توجيهية للمستخدم مع رابط القصة
+            await SendStoryCompletionMessage(joinChannel, user, story);
+
+            // إزالة صلاحية الكتابة من المستخدم
+            await RemoveUserWritePermission(joinChannel, user);
+            
             Console.WriteLine("[Info] Story sent to join channel and story channel successfully.");
         }
         catch (Exception ex)
@@ -676,6 +749,70 @@ class Program
             }
             Console.WriteLine("[Timeout] User did not respond in time.");
             return "لم يتم الرد في الوقت المحدد";
+        }
+    }
+
+    private async Task GiveUserWritePermission(ITextChannel channel, SocketGuildUser user)
+    {
+        try
+        {
+            var permissionOverwrite = new OverwritePermissions(
+                sendMessages: PermValue.Allow,
+                viewChannel: PermValue.Allow
+            );
+            
+            await channel.AddPermissionOverwriteAsync(user, permissionOverwrite);
+            Console.WriteLine($"[Info] Gave write permission to {user.Username} in join channel");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[Error] Failed to give write permission to {user.Username}: {ex.Message}");
+            await LogError("Permission Error", ex.Message, $"Failed to give write permission to {user.Username}");
+        }
+    }
+
+    private async Task RemoveUserWritePermission(ITextChannel channel, SocketGuildUser user)
+    {
+        try
+        {
+            await channel.RemovePermissionOverwriteAsync(user);
+            Console.WriteLine($"[Info] Removed write permission from {user.Username} in join channel");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[Error] Failed to remove write permission from {user.Username}: {ex.Message}");
+            await LogError("Permission Error", ex.Message, $"Failed to remove write permission from {user.Username}");
+        }
+    }
+
+    private async Task SendStoryCompletionMessage(ITextChannel channel, SocketGuildUser user, string story)
+    {
+        try
+        {
+            string storyLink = $"https://discord.com/channels/{user.Guild?.Id}/{storyChannelId}";
+            
+            var embed = new EmbedBuilder()
+                .WithColor(0x00ff00) // لون أخضر للنجاح
+                .WithTitle("🎉 مبروك! تم إنشاء قصتك بنجاح!")
+                .WithDescription($"**مرحباً {user.Username}!**\n\n" +
+                               $"تم إنشاء قصتك بنجاح وتم حفظها في قاعدة بيانات العائلة! 📖\n\n" +
+                               $"**اقرأ قصتك هنا:**\n" +
+                               $"🔗 {storyLink}\n\n" +
+                               $"**أو اذهب إلى تشانل القصص مباشرة**")
+                .AddField("🎭 قصة العضو", story.Length > 1024 ? story.Substring(0, 1021) + "..." : story)
+                .WithFooter($"تم إنشاء القصة في {DateTime.Now:dd/MM/yyyy HH:mm}")
+                .WithTimestamp(DateTimeOffset.Now)
+                .Build();
+
+            var allowedUsers = new List<ulong> { ownerId, user.Id };
+            await channel.SendMessageAsync(text: user.Mention, embed: embed, allowedMentions: new AllowedMentions { UserIds = allowedUsers });
+            
+            Console.WriteLine($"[Info] Story completion message sent to {user.Username}");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[Error] Failed to send story completion message: {ex.Message}");
+            await LogError("Story Completion Error", ex.Message, $"Failed to send story completion message to {user.Username}");
         }
     }
 
