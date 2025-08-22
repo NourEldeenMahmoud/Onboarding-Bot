@@ -17,6 +17,7 @@ class Program
     private DiscordSocketClient? _client;
     private InteractionService? _interactionService;
     private Dictionary<string, int> _inviteUses = new Dictionary<string, int>();
+    private HashSet<ulong> _processedUsers = new HashSet<ulong>();
     string _token = "";
     string _ChatGPTApiKey = "";
     
@@ -178,14 +179,27 @@ class Program
     {
         try
         {
+            // منع تكرار معالجة نفس المستخدم
+            if (_processedUsers.Contains(user.Id))
+            {
+                Console.WriteLine($"[Warning] User {user.Username} already being processed, skipping...");
+                return;
+            }
+            
+            _processedUsers.Add(user.Id);
             Console.WriteLine($"[UserJoined] {user.Username} joined.");
 
             var guild = user.Guild;
+            
+            // إضافة تأخير صغير للتأكد من تحديث الانفايت
+            await Task.Delay(1000);
+            
             var invitesAfter = await guild.GetInvitesAsync();
 
             RestInviteMetadata usedInvite = null;
             Console.WriteLine($"[Invite Detection] Checking invites for user {user.Username}...");
             
+            // البحث عن الانفايت المستخدم
             foreach (var invite in invitesAfter)
             {
                 var previousUses = _inviteUses.ContainsKey(invite.Code) ? _inviteUses[invite.Code] : 0;
@@ -198,6 +212,24 @@ class Program
                     usedInvite = invite;
                     Console.WriteLine($"[Invite Detection] Found used invite: {invite.Code} by {invite.Inviter?.Username ?? "Unknown"}");
                     break;
+                }
+            }
+
+            // إذا لم نجد انفايت، نحاول البحث بطريقة أخرى
+            if (usedInvite == null)
+            {
+                Console.WriteLine($"[Invite Detection] Trying alternative detection method...");
+                
+                // البحث عن الانفايت الذي زاد استخدامه
+                var mostUsedInvite = invitesAfter
+                    .Where(i => i.Uses > 0)
+                    .OrderByDescending(i => i.Uses)
+                    .FirstOrDefault();
+                
+                if (mostUsedInvite != null)
+                {
+                    usedInvite = mostUsedInvite;
+                    Console.WriteLine($"[Invite Detection] Using most used invite: {mostUsedInvite.Code} by {mostUsedInvite.Inviter?.Username ?? "Unknown"}");
                 }
             }
 
@@ -685,15 +717,7 @@ class Program
         {
             string storyLink = $"https://discord.com/channels/{user.Guild?.Id}/{storyChannelId}";
             
-            // إنشاء Embed منسق للقصة
-            var storyEmbed = new EmbedBuilder()
-                .WithColor(new Color(0x00ff00)) // لون أخضر
-                .WithAuthor("📜🎭 قصة العضو", iconUrl: user.GetAvatarUrl())
-                .WithTitle(ExtractStoryTitle(story))
-                .WithDescription(story)
-                .Build();
-
-            // إنشاء Embed منفصل للرسالة التوجيهية
+            // إنشاء Embed للرسالة التوجيهية فقط (بدون القصة)
             var infoEmbed = new EmbedBuilder()
                 .WithColor(new Color(0x00ff00))
                 .WithTitle("🎉 مبروك! تم إنشاء قصتك بنجاح!")
@@ -708,11 +732,8 @@ class Program
 
             var allowedUsers = new List<ulong> { ownerId, user.Id };
             
-            // إرسال القصة أولاً
-            await channel.SendMessageAsync(text: user.Mention, embed: storyEmbed, allowedMentions: new AllowedMentions { UserIds = allowedUsers });
-            
-            // إرسال الرسالة التوجيهية
-            await channel.SendMessageAsync(embed: infoEmbed);
+            // إرسال الرسالة التوجيهية فقط
+            await channel.SendMessageAsync(text: user.Mention, embed: infoEmbed, allowedMentions: new AllowedMentions { UserIds = allowedUsers });
             
             Console.WriteLine($"[Info] Story completion message sent to {user.Username}");
         }
