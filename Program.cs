@@ -247,10 +247,16 @@ class Program
             // Check if user joined without invite
             bool hasInviter = usedInvite?.Inviter != null;
             
-            string inviterName = hasInviter ? usedInvite.Inviter.Username : "غير معروف";
             ulong inviterId = hasInviter ? usedInvite.Inviter.Id : 0;
-
             var inviterUser = hasInviter ? guild.GetUser(inviterId) : null;
+            
+            // استخدام Nickname إذا كان موجود، وإلا Username
+            string inviterName = "غير معروف";
+            if (hasInviter && inviterUser != null)
+            {
+                inviterName = !string.IsNullOrEmpty(inviterUser.Nickname) ? inviterUser.Nickname : inviterUser.Username;
+            }
+            
             var inviterRole = hasInviter && inviterUser != null ? inviterUser.Roles
                 .Where(r => r.Id != guild.EveryoneRole.Id)
                 .OrderByDescending(r => r.Position)
@@ -275,20 +281,7 @@ class Program
             {
                 Console.WriteLine($"[Info] User {user.Username} already has a story, skipping onboarding");
                 
-                // إرسال رسالة ترحيب للمستخدم القديم
-                try
-                {
-                    var dm = await user.CreateDMChannelAsync();
-                    await SendDM(dm, $"🎭 **مرحباً بعودتك {user.Username}!**\n\n" +
-                                      "أنت عضو قديم في العائلة ولديك قصة مسجلة بالفعل! 📖\n" +
-                                      "لا تحتاج لإعادة عملية التسجيل.\n\n" +
-                                      "استخدم الأمر `/story @{user.Username}` لعرض قصتك.\n\n" +
-                                      "أهلاً بعودتك لعالم **The Underworld**! 🌃");
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"[Warning] Could not send welcome back DM to {user.Username}: {ex.Message}");
-                }
+
 
                 // إرسال رسالة ترحيب في قناة Join the Family للعضو القديم
                 var joinChannel = _client?.GetChannel(joinFamilyChannelId) as ITextChannel;
@@ -460,11 +453,11 @@ class Program
                 Console.WriteLine("[Info] Story channel not configured - skipping channel posting.");
             }
 
-            // إرسال رسالة توجيهية للمستخدم مع رابط القصة
-            await SendStoryCompletionMessage(newMemberJoinChannel, user, story);
-
             // إزالة صلاحية الكتابة من المستخدم
             await RemoveUserWritePermission(newMemberJoinChannel, user);
+            
+            // حذف رسائل الأسئلة بعد الانتهاء
+            await CleanupQuestionMessages(newMemberJoinChannel, user);
             
             Console.WriteLine("[Info] Story sent to join channel and story channel successfully.");
         }
@@ -473,17 +466,7 @@ class Program
             Console.WriteLine("[Error] Exception in HandleUserJoinedAsync: " + ex);
             await LogError("User Join Processing Error", ex.ToString(), $"Failed to process user join for {user.Username}");
             
-            // Try to send error message to user
-            try
-            {
-                var dm = await user.CreateDMChannelAsync();
-                await SendDM(dm, "عذراً، حدث خطأ أثناء معالجة انضمامك. الرجاء التواصل مع الإدارة.");
-            }
-            catch (Exception dmEx)
-            {
-                Console.WriteLine($"[Error] Failed to send error DM: {dmEx.Message}");
-                await LogError("Error DM Failed", dmEx.Message, $"Failed to send error DM to {user.Username}");
-            }
+
         }
     }
 
@@ -515,18 +498,7 @@ class Program
         }
     }
 
-    private async Task SendDM(IDMChannel dm, string message)
-    {
-        try
-        {
-            await dm.SendMessageAsync(message);
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine("[DM Error] " + ex.Message);
-            await LogError("DM Error", ex.Message, "Failed to send DM message");
-        }
-    }
+
 
     private async Task SendWelcomeToChannel(ITextChannel channel, SocketGuildUser user, bool hasInviter, string inviterName = "", string inviterRole = "")
     {
@@ -708,6 +680,29 @@ class Program
         {
             Console.WriteLine($"[Error] Failed to remove write permission from {user.Username}: {ex.Message}");
             await LogError("Permission Error", ex.Message, $"Failed to remove write permission from {user.Username}");
+        }
+    }
+
+    private async Task CleanupQuestionMessages(ITextChannel channel, SocketGuildUser user)
+    {
+        try
+        {
+            // حذف رسائل الأسئلة والردود (آخر 20 رسالة)
+            var messages = await channel.GetMessagesAsync(20).FlattenAsync();
+            var messagesToDelete = messages.Where(m => 
+                (m.Author.Id == _client?.CurrentUser?.Id && m.Content.Contains("💬 **سؤال:**")) ||
+                (m.Author.Id == user.Id && !m.Author.IsBot)
+            ).ToList();
+
+            if (messagesToDelete.Any())
+            {
+                await channel.DeleteMessagesAsync(messagesToDelete);
+                Console.WriteLine($"[Info] Deleted {messagesToDelete.Count} question/answer messages for {user.Username}");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[Warning] Could not cleanup messages for {user.Username}: {ex.Message}");
         }
     }
 
