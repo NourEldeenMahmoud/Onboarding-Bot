@@ -1089,27 +1089,27 @@ public class StoryCommands : InteractionModuleBase<SocketInteractionContext>
     {
         try
         {
-            // البحث عن الأعضاء الآخرين في نفس المرحلة
-            var otherOutsiders = channel.Guild.Users
-                .Where(u => u.Roles.Any(r => r.Id == ulong.Parse(Environment.GetEnvironmentVariable("OUTSIDER_ROLE_ID") ?? "0")))
-                .Where(u => u.Id != user.Id)
-                .ToList();
-
-            foreach (var otherUser in otherOutsiders)
+            // تبسيط الكود - إعطاء صلاحيات للتفاعل مع الأعضاء الآخرين
+            var outsiderRoleIdStr = Environment.GetEnvironmentVariable("OUTSIDER_ROLE_ID");
+            if (ulong.TryParse(outsiderRoleIdStr, out ulong outsiderRoleId) && outsiderRoleId != 0)
             {
-                // إعطاء صلاحيات للتفاعل مع الأعضاء الآخرين
-                var interactionPermissions = new OverwritePermissions(
-                    viewChannel: PermValue.Allow,
-                    sendMessages: PermValue.Allow,
-                    readMessageHistory: PermValue.Allow,
-                    addReactions: PermValue.Allow,
-                    embedLinks: PermValue.Allow,
-                    attachFiles: PermValue.Allow,
-                    useExternalEmojis: PermValue.Allow
-                );
-                
-                await channel.AddPermissionOverwriteAsync(otherUser, interactionPermissions);
-                Console.WriteLine($"[Interaction] Enabled interaction between {user.Username} and {otherUser.Username}");
+                var outsiderRole = channel.Guild.GetRole(outsiderRoleId);
+                if (outsiderRole != null)
+                {
+                    // إعطاء صلاحيات للتفاعل مع الأعضاء الآخرين
+                    var interactionPermissions = new OverwritePermissions(
+                        viewChannel: PermValue.Allow,
+                        sendMessages: PermValue.Allow,
+                        readMessageHistory: PermValue.Allow,
+                        addReactions: PermValue.Allow,
+                        embedLinks: PermValue.Allow,
+                        attachFiles: PermValue.Allow,
+                        useExternalEmojis: PermValue.Allow
+                    );
+                    
+                    await channel.AddPermissionOverwriteAsync(user, interactionPermissions);
+                    Console.WriteLine($"[Interaction] Enabled interaction for {user.Username}");
+                }
             }
         }
         catch (Exception ex)
