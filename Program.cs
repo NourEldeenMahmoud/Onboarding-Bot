@@ -727,6 +727,126 @@ Hidden Docks، Tech Lab، Abandoned Warehouse، والمزيد.
             Console.WriteLine($"[Config Error] Failed to load configuration: {ex.Message}");
         }
     }
+
+    private async Task GenerateAndSendStory(ITextChannel channel, SocketGuildUser user, Dictionary<string, string> answers)
+    {
+        try
+        {
+            // إنشاء القصة التفصيلية
+            var story = await GenerateStory(
+                answers["ما اسمك الحقيقي؟"],
+                answers["كم عمرك؟"],
+                answers["ما هي اهتماماتك؟"],
+                answers["ما هو تخصصك؟"],
+                answers["ما هي ميزتك؟"],
+                answers["ما هو عيبك؟"],
+                answers["ما هو المكان المفضل لديك؟"],
+                "nnoureldeen6629", // inviterName - أنت من دعاه
+                "The Don", // inviterRole - رولك
+                "قائد العائلة ومؤسس BitMob", // inviterStory - قصتك
+                true // hasInviter - نعم، له مدعو
+            );
+
+            // حفظ القصة
+            await SaveStoryToFile(user.Id, story);
+
+            // إرسال القصة في قناة القصص
+            var familyStoriesChannelIdStr = Environment.GetEnvironmentVariable("FAMILY_STORIES_CHANNEL_ID");
+            Console.WriteLine($"[Debug] FAMILY_STORIES_CHANNEL_ID raw value: '{familyStoriesChannelIdStr}'");
+            
+            // تنظيف القيمة من أي نصوص إضافية
+            var cleanChannelId = familyStoriesChannelIdStr?.Split('#')[0]?.Trim();
+            Console.WriteLine($"[Debug] Cleaned channel ID: '{cleanChannelId}'");
+            
+            if (ulong.TryParse(cleanChannelId, out ulong familyStoriesChannelId) && familyStoriesChannelId != 0)
+            {
+                var familyStoriesChannel = _client?.GetChannel(familyStoriesChannelId) as IMessageChannel;
+                if (familyStoriesChannel != null)
+                {
+                    var storyEmbed = new EmbedBuilder()
+                        .WithColor(0x00ff00) // أخضر للمستخدمين مع دعوة
+                        .WithTitle("🎭 قصة جديدة في العائلة")
+                        .WithDescription(story)
+                        .WithFooter($"قصة {user.Username}")
+                        .WithTimestamp(DateTimeOffset.Now)
+                        .Build();
+
+                    await familyStoriesChannel.SendMessageAsync(text: user.Mention, embed: storyEmbed);
+                    Console.WriteLine($"[Story Sent] Story sent to family stories channel for user {user.Username}");
+                    
+                    // إرسال رسالة تأكيد في قناة الأسئلة
+                    await channel.SendMessageAsync(text: user.Mention, embed: new EmbedBuilder()
+                        .WithColor(0x00ff00)
+                        .WithTitle("✅ تم إرسال القصة")
+                        .WithDescription($"تم إرسال قصتك إلى قناة القصص بنجاح!")
+                        .Build());
+                }
+                else
+                {
+                    Console.WriteLine($"[Error] Family stories channel not found: {familyStoriesChannelId}");
+                    
+                    // إرسال رسالة خطأ في قناة الأسئلة
+                    await channel.SendMessageAsync(text: user.Mention, embed: new EmbedBuilder()
+                        .WithColor(0xff0000)
+                        .WithTitle("❌ خطأ في إرسال القصة")
+                        .WithDescription("لم يتم العثور على قناة القصص. تواصل مع الإدارة.")
+                        .Build());
+                }
+            }
+            else
+            {
+                Console.WriteLine($"[Error] FAMILY_STORIES_CHANNEL_ID not configured: {familyStoriesChannelIdStr}");
+            }
+
+            // رسالة نجاح
+            await channel.SendMessageAsync(text: user.Mention, embed: new EmbedBuilder()
+                .WithColor(0x00ff00)
+                .WithTitle("🎉 تم إنشاء قصتك بنجاح!")
+                .WithDescription("تم إرسال قصتك إلى قناة القصص.\nتم ترقيتك إلى رول Associate.")
+                .Build());
+
+            // ترقية العضو
+            await PromoteUserToAssociate(user);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[Generate Story Error] {ex.Message}");
+            await LogError("Story Generation Error", ex.Message, $"Failed to generate story for user {user.Username}");
+            
+            await channel.SendMessageAsync(text: user.Mention, embed: new EmbedBuilder()
+                .WithColor(0xff0000)
+                .WithTitle("❌ خطأ")
+                .WithDescription("حدث خطأ أثناء إنشاء القصة. حاول مرة أخرى.")
+                .Build());
+        }
+    }
+
+    private async Task SaveStoryToFile(ulong userId, string story)
+    {
+        try
+        {
+            const string StoriesFile = "stories.json";
+            var stories = new Dictionary<ulong, string>();
+
+            if (File.Exists(StoriesFile))
+            {
+                var content = File.ReadAllText(StoriesFile);
+                if (!string.IsNullOrEmpty(content))
+                {
+                    stories = JsonConvert.DeserializeObject<Dictionary<ulong, string>>(content) ?? new Dictionary<ulong, string>();
+                }
+            }
+
+            stories[userId] = story;
+            File.WriteAllText(StoriesFile, JsonConvert.SerializeObject(stories, Formatting.Indented));
+            Console.WriteLine($"[Save Story] Story saved for user {userId}");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[Save Story Error] {ex.Message}");
+            await LogError("Save Story Error", ex.Message, $"Failed to save story for user {userId}");
+        }
+    }
 }
 
 // Story Commands Module
@@ -1531,115 +1651,6 @@ public class StoryCommands : InteractionModuleBase<SocketInteractionContext>
             .Build();
 
         await channel.SendMessageAsync(text: user.Mention, embed: embed);
-    }
-
-    private async Task GenerateAndSendStory(ITextChannel channel, SocketGuildUser user, Dictionary<string, string> answers)
-    {
-        try
-        {
-            // إنشاء القصة
-            var story = await GenerateStoryFromAnswers(answers, user.Username);
-
-            // حفظ القصة
-            await SaveStoryToFile(user.Id, story);
-
-            // إرسال القصة في قناة القصص
-            var familyStoriesChannelIdStr = Environment.GetEnvironmentVariable("FAMILY_STORIES_CHANNEL_ID");
-            Console.WriteLine($"[Debug] FAMILY_STORIES_CHANNEL_ID raw value: '{familyStoriesChannelIdStr}'");
-            
-            // تنظيف القيمة من أي نصوص إضافية
-            var cleanChannelId = familyStoriesChannelIdStr?.Split('#')[0]?.Trim();
-            Console.WriteLine($"[Debug] Cleaned channel ID: '{cleanChannelId}'");
-            
-            if (ulong.TryParse(cleanChannelId, out ulong familyStoriesChannelId) && familyStoriesChannelId != 0)
-            {
-                var familyStoriesChannel = Context.Client.GetChannel(familyStoriesChannelId) as IMessageChannel;
-                if (familyStoriesChannel != null)
-                {
-                    var storyEmbed = new EmbedBuilder()
-                        .WithColor(0xff6b35) // برتقالي للمستخدمين بدون دعوة
-                        .WithTitle("🎭 قصة جديدة في العائلة")
-                        .WithDescription(story)
-                        .WithFooter($"قصة {user.Username}")
-                        .WithTimestamp(DateTimeOffset.Now)
-                        .Build();
-
-                    await familyStoriesChannel.SendMessageAsync(text: user.Mention, embed: storyEmbed);
-                    Console.WriteLine($"[Story Sent] Story sent to family stories channel for user {user.Username}");
-                    
-                    // إرسال رسالة تأكيد في قناة الأسئلة
-                    await channel.SendMessageAsync(text: user.Mention, embed: new EmbedBuilder()
-                        .WithColor(0x00ff00)
-                        .WithTitle("✅ تم إرسال القصة")
-                        .WithDescription($"تم إرسال قصتك إلى قناة القصص بنجاح!")
-                        .Build());
-                }
-                else
-                {
-                    Console.WriteLine($"[Error] Family stories channel not found: {familyStoriesChannelId}");
-                    
-                    // إرسال رسالة خطأ في قناة الأسئلة
-                    await channel.SendMessageAsync(text: user.Mention, embed: new EmbedBuilder()
-                        .WithColor(0xff0000)
-                        .WithTitle("❌ خطأ في إرسال القصة")
-                        .WithDescription("لم يتم العثور على قناة القصص. تواصل مع الإدارة.")
-                        .Build());
-                }
-            }
-            else
-            {
-                Console.WriteLine($"[Error] FAMILY_STORIES_CHANNEL_ID not configured: {familyStoriesChannelIdStr}");
-            }
-
-            // رسالة نجاح
-            await channel.SendMessageAsync(text: user.Mention, embed: new EmbedBuilder()
-                .WithColor(0x00ff00)
-                .WithTitle("🎉 تم إنشاء قصتك بنجاح!")
-                .WithDescription("تم إرسال قصتك إلى قناة القصص.\nتم ترقيتك إلى رول Associate.")
-                .Build());
-
-            // ترقية العضو
-            await PromoteUserToAssociate(user);
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"[Generate Story Error] {ex.Message}");
-            Console.WriteLine($"[Error] Story Generation Error: {ex.Message}");
-            
-            await channel.SendMessageAsync(text: user.Mention, embed: new EmbedBuilder()
-                .WithColor(0xff0000)
-                .WithTitle("❌ خطأ")
-                .WithDescription("حدث خطأ أثناء إنشاء القصة. حاول مرة أخرى.")
-                .Build());
-        }
-    }
-
-    private async Task SaveStoryToFile(ulong userId, string story)
-    {
-        try
-        {
-            const string StoriesFile = "stories.json";
-            var stories = new Dictionary<ulong, string>();
-
-            if (File.Exists(StoriesFile))
-            {
-                var content = File.ReadAllText(StoriesFile);
-                if (!string.IsNullOrEmpty(content))
-                {
-                    stories = JsonConvert.DeserializeObject<Dictionary<ulong, string>>(content) ?? new Dictionary<ulong, string>();
-                }
-            }
-
-            stories[userId] = story;
-            File.WriteAllText(StoriesFile, JsonConvert.SerializeObject(stories, Formatting.Indented));
-            
-            Console.WriteLine($"[SaveStory] Story saved for user {userId}");
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"[SaveStoryToFile Error] {ex.Message}");
-            Console.WriteLine($"[Error] Story Save Error: {ex.Message}");
-        }
     }
 
 
