@@ -1677,17 +1677,23 @@ public class StoryCommands : InteractionModuleBase<SocketInteractionContext>
 
             // مراقبة الرسائل لمدة 5 دقائق
             var timeout = DateTime.Now.AddMinutes(5);
-            var messageReceived = false;
+            var lastMessageTime = DateTimeOffset.MinValue;
 
             while (DateTime.Now < timeout && currentQuestionIndex < questions.Length)
             {
                 // انتظار رسالة من المستخدم
                 var messages = await channel.GetMessagesAsync(10).FlattenAsync();
-                var userMessage = messages.FirstOrDefault(m => m.Author.Id == user.Id && m.Timestamp > DateTimeOffset.Now.AddSeconds(-30));
+                var userMessage = messages.FirstOrDefault(m => 
+                    m.Author.Id == user.Id && 
+                    m.Timestamp > lastMessageTime &&
+                    m.Timestamp > DateTimeOffset.Now.AddSeconds(-30));
 
-                if (userMessage != null && !messageReceived)
+                if (userMessage != null)
                 {
-                    messageReceived = true;
+                    // تحديث وقت آخر رسالة
+                    lastMessageTime = userMessage.Timestamp;
+                    
+                    // حفظ إجابة المستخدم
                     answers[questions[currentQuestionIndex]] = userMessage.Content;
 
                     // لا نحذف رسالة المستخدم - نتركها
@@ -1697,9 +1703,11 @@ public class StoryCommands : InteractionModuleBase<SocketInteractionContext>
 
                     if (currentQuestionIndex < questions.Length)
                     {
+                        // انتظار 3 ثواني قبل إرسال السؤال التالي
+                        await Task.Delay(3000);
+                        
                         // إرسال السؤال التالي
                         await SendQuestion(channel, user, questions[currentQuestionIndex], currentQuestionIndex + 1, questions.Length);
-                        messageReceived = false;
                     }
                     else
                     {
