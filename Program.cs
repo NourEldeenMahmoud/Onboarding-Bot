@@ -1194,28 +1194,34 @@ public class StoryCommands : InteractionModuleBase<SocketInteractionContext>
             
             if (hasStory)
             {
-                // العضو له قصة - رسالة عضو قديم
+                // العضو له قصة - إعطاء رول Associate تلقائياً
+                await PromoteUserToAssociate(user);
+                
                 var embed = new EmbedBuilder()
-                    .WithColor(0x2f3136)
+                    .WithColor(0x00ff00)
                     .WithTitle("🎭 أهلاً بعودتك!")
                     .WithDescription("أنت عضو قديم في العائلة وقد أكملت عملية الانضمام من قبل.\n\n" +
+                                   "✅ **تم ترقيتك تلقائياً إلى رول Associate**\n" +
+                                   "🔒 **تم إخفاء قناة الأسئلة عنك**\n\n" +
                                    "**لا حاجة لإعادة التسجيل.** 🎉")
                     .WithFooter("مرحباً بك مرة أخرى في عائلة BitMob")
                     .WithTimestamp(DateTimeOffset.Now)
                     .Build();
 
-                            // إرسال الرسالة في قناة القصص
-            var familyStoriesChannelIdStr = Environment.GetEnvironmentVariable("FAMILY_STORIES_CHANNEL_ID");
-            if (ulong.TryParse(familyStoriesChannelIdStr, out ulong familyStoriesChannelId) && familyStoriesChannelId != 0)
-            {
-                var familyStoriesChannel = Context.Guild.GetTextChannel(familyStoriesChannelId);
-                if (familyStoriesChannel != null)
+                // إرسال الرسالة في قناة القصص
+                var familyStoriesChannelIdStr = Environment.GetEnvironmentVariable("FAMILY_STORIES_CHANNEL_ID");
+                if (ulong.TryParse(familyStoriesChannelIdStr, out ulong familyStoriesChannelId) && familyStoriesChannelId != 0)
                 {
-                    await familyStoriesChannel.SendMessageAsync(text: user.Mention, embed: embed);
+                    var familyStoriesChannel = Context.Guild.GetTextChannel(familyStoriesChannelId);
+                    if (familyStoriesChannel != null)
+                    {
+                        await familyStoriesChannel.SendMessageAsync(text: user.Mention, embed: embed);
+                    }
                 }
-            }
                 
-                await FollowupAsync("✅ تم إرسال رسالة الترحيب في قناة القصص");
+                await FollowupAsync("✅ **تم ترقيتك تلقائياً إلى رول Associate!**\n\n" +
+                                   "🎭 تم إرسال رسالة الترحيب في قناة القصص\n" +
+                                   "🔒 تم إخفاء قناة الأسئلة عنك");
                 return;
             }
 
