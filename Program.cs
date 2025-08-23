@@ -215,13 +215,13 @@ class Program
             if (!result.IsSuccess)
             {
                 Console.WriteLine($"[Interaction Error] {result.ErrorReason}");
-                await LogError("Interaction Error", result.ErrorReason, $"Failed to execute command: Unknown");
+                // await LogError("Interaction Error", result.ErrorReason, $"Failed to execute command: Unknown");
             }
         }
         catch (Exception ex)
         {
             Console.WriteLine($"[Interaction Error] {ex}");
-            await LogError("Interaction Error", ex.ToString(), "Failed to handle interaction");
+            // await LogError("Interaction Error", ex.ToString(), "Failed to handle interaction");
         }
     }
 
@@ -248,7 +248,7 @@ class Program
         catch (Exception ex)
         {
             Console.WriteLine($"[Error] Failed to register commands: {ex}");
-            await LogError("Command Registration Error", ex.ToString(), "Failed to register slash commands");
+            // await LogError("Command Registration Error", ex.ToString(), "Failed to register slash commands");
         }
     }
 
@@ -290,7 +290,7 @@ class Program
         catch (Exception ex)
         {
             Console.WriteLine($"[Error] Failed to assign {roleName} role to {user.Username}: {ex.Message}");
-            await LogError("Role Assignment Error", ex.Message, $"Failed to assign {roleName} role to {user.Username}");
+            // await LogError("Role Assignment Error", ex.Message, $"Failed to assign {roleName} role to {user.Username}");
         }
     }
 
@@ -355,7 +355,7 @@ class Program
         catch (Exception ex)
         {
             Console.WriteLine("[Channel Error] " + ex.Message);
-            await LogError("Channel Message Error", ex.Message, "Failed to send message to channel");
+            // await LogError("Channel Message Error", ex.Message, "Failed to send message to channel");
         }
     }
 
@@ -480,7 +480,7 @@ Hidden Docks، Tech Lab، Abandoned Warehouse، والمزيد.
         {
             var client = new RestClient("https://api.openai.com/v1/chat/completions");
             var request = new RestRequest("", Method.Post);
-            request.AddHeader("Authorization", $"Bearer {_ChatGPTApiKey}");
+            request.AddHeader("Authorization", $"Bearer {Environment.GetEnvironmentVariable("OPENAI_KEY")}");
             request.AddHeader("Content-Type", "application/json");
 
             var body = new
@@ -518,7 +518,7 @@ Hidden Docks، Tech Lab، Abandoned Warehouse، والمزيد.
         catch (Exception ex)
         {
             Console.WriteLine("[OpenAI Exception] " + ex);
-            await LogError("OpenAI API Error", ex.ToString(), "Failed to generate story using OpenAI");
+            // await LogError("OpenAI API Error", ex.ToString(), "Failed to generate story using OpenAI");
             return "حصل خطأ غير متوقع أثناء توليد القصة.";
         }
     }
@@ -811,7 +811,7 @@ Hidden Docks، Tech Lab، Abandoned Warehouse، والمزيد.
         catch (Exception ex)
         {
             Console.WriteLine($"[Generate Story Error] {ex.Message}");
-            await LogError("Story Generation Error", ex.Message, $"Failed to generate story for user {user.Username}");
+            // await LogError("Story Generation Error", ex.Message, $"Failed to generate story for user {user.Username}");
             
             await channel.SendMessageAsync(text: user.Mention, embed: new EmbedBuilder()
                 .WithColor(0xff0000)
@@ -844,7 +844,95 @@ Hidden Docks، Tech Lab، Abandoned Warehouse، والمزيد.
         catch (Exception ex)
         {
             Console.WriteLine($"[Save Story Error] {ex.Message}");
-            await LogError("Save Story Error", ex.Message, $"Failed to save story for user {userId}");
+            // await LogError("Save Story Error", ex.Message, $"Failed to save story for user {userId}");
+        }
+    }
+
+    private async Task PromoteUserToAssociate(SocketGuildUser user)
+    {
+        try
+        {
+            var associateRoleIdStr = Environment.GetEnvironmentVariable("ASSOCIATE_ROLE_ID");
+            var outsiderRoleIdStr = Environment.GetEnvironmentVariable("OUTSIDER_ROLE_ID");
+            
+            if (ulong.TryParse(associateRoleIdStr, out ulong associateRoleId) && associateRoleId != 0)
+            {
+                var associateRole = user.Guild.GetRole(associateRoleId);
+                if (associateRole != null)
+                {
+                    await user.AddRoleAsync(associateRole);
+                    Console.WriteLine($"[Promotion] Promoted {user.Username} to Associate role");
+                }
+            }
+            
+            if (ulong.TryParse(outsiderRoleIdStr, out ulong outsiderRoleId) && outsiderRoleId != 0)
+            {
+                var outsiderRole = user.Guild.GetRole(outsiderRoleId);
+                if (outsiderRole != null)
+                {
+                    await user.RemoveRoleAsync(outsiderRole);
+                    Console.WriteLine($"[Promotion] Removed Outsider role from {user.Username}");
+                }
+            }
+            
+            // تحديث صلاحيات القناة
+            var cityGatesChannelIdStr = Environment.GetEnvironmentVariable("CITY_GATES_CHANNEL_ID");
+            if (ulong.TryParse(cityGatesChannelIdStr, out ulong cityGatesChannelId) && cityGatesChannelId != 0)
+            {
+                var cityGatesChannel = user.Guild.GetTextChannel(cityGatesChannelId);
+                if (cityGatesChannel != null)
+                {
+                    await SetChannelVisibilityForUser(cityGatesChannel, user, false); // false = ليس outsider
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[PromoteUserToAssociate Error] {ex.Message}");
+        }
+    }
+
+    private async Task SetChannelVisibilityForUser(ITextChannel channel, SocketGuildUser user, bool isOutsider)
+    {
+        try
+        {
+            if (isOutsider)
+            {
+                // العضو outsider - إعطاء صلاحيات كاملة للتفاعل
+                var allowPermissions = new OverwritePermissions(
+                    viewChannel: PermValue.Allow,
+                    sendMessages: PermValue.Allow,
+                    readMessageHistory: PermValue.Allow,
+                    addReactions: PermValue.Allow,
+                    embedLinks: PermValue.Allow,
+                    attachFiles: PermValue.Allow,
+                    useExternalEmojis: PermValue.Allow
+                );
+                await channel.AddPermissionOverwriteAsync(user, allowPermissions);
+                Console.WriteLine($"[Permission] Granted full channel access to outsider: {user.Username}");
+                
+                // تمكين التفاعل مع الأعضاء الآخرين
+                // await EnableUserInteraction(channel, user); // تم إزالة هذه الدالة
+            }
+            else
+            {
+                // العضو associate - إخفاء قناة الأسئلة عنه
+                var hidePermissions = new OverwritePermissions(
+                    viewChannel: PermValue.Deny,
+                    sendMessages: PermValue.Deny,
+                    readMessageHistory: PermValue.Deny,
+                    addReactions: PermValue.Deny,
+                    embedLinks: PermValue.Deny,
+                    attachFiles: PermValue.Deny,
+                    useExternalEmojis: PermValue.Deny
+                );
+                await channel.AddPermissionOverwriteAsync(user, hidePermissions);
+                Console.WriteLine($"[Permission] Hidden channel from associate: {user.Username}");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[SetChannelVisibility Error] {ex.Message}");
         }
     }
 }
@@ -1280,94 +1368,6 @@ public class StoryCommands : InteractionModuleBase<SocketInteractionContext>
         }
     }
 
-    private async Task PromoteUserToAssociate(SocketGuildUser user)
-    {
-        try
-        {
-            var associateRoleIdStr = Environment.GetEnvironmentVariable("ASSOCIATE_ROLE_ID");
-            var outsiderRoleIdStr = Environment.GetEnvironmentVariable("OUTSIDER_ROLE_ID");
-            
-            if (ulong.TryParse(associateRoleIdStr, out ulong associateRoleId) && associateRoleId != 0)
-            {
-                var associateRole = user.Guild.GetRole(associateRoleId);
-                if (associateRole != null)
-                {
-                    await user.AddRoleAsync(associateRole);
-                    Console.WriteLine($"[Promotion] Promoted {user.Username} to Associate role");
-                }
-            }
-            
-            if (ulong.TryParse(outsiderRoleIdStr, out ulong outsiderRoleId) && outsiderRoleId != 0)
-            {
-                var outsiderRole = user.Guild.GetRole(outsiderRoleId);
-                if (outsiderRole != null)
-                {
-                    await user.RemoveRoleAsync(outsiderRole);
-                    Console.WriteLine($"[Promotion] Removed Outsider role from {user.Username}");
-                }
-            }
-            
-            // تحديث صلاحيات القناة
-            var cityGatesChannelIdStr = Environment.GetEnvironmentVariable("CITY_GATES_CHANNEL_ID");
-            if (ulong.TryParse(cityGatesChannelIdStr, out ulong cityGatesChannelId) && cityGatesChannelId != 0)
-            {
-                var cityGatesChannel = user.Guild.GetTextChannel(cityGatesChannelId);
-                if (cityGatesChannel != null)
-                {
-                    await SetChannelVisibilityForUser(cityGatesChannel, user, false); // false = ليس outsider
-                }
-            }
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"[PromoteUserToAssociate Error] {ex.Message}");
-        }
-    }
-
-    private async Task SetChannelVisibilityForUser(ITextChannel channel, SocketGuildUser user, bool isOutsider)
-    {
-        try
-        {
-            if (isOutsider)
-            {
-                // العضو outsider - إعطاء صلاحيات كاملة للتفاعل
-                var allowPermissions = new OverwritePermissions(
-                    viewChannel: PermValue.Allow,
-                    sendMessages: PermValue.Allow,
-                    readMessageHistory: PermValue.Allow,
-                    addReactions: PermValue.Allow,
-                    embedLinks: PermValue.Allow,
-                    attachFiles: PermValue.Allow,
-                    useExternalEmojis: PermValue.Allow
-                );
-                await channel.AddPermissionOverwriteAsync(user, allowPermissions);
-                Console.WriteLine($"[Permission] Granted full channel access to outsider: {user.Username}");
-                
-                // تمكين التفاعل مع الأعضاء الآخرين
-                await EnableUserInteraction(channel, user);
-            }
-            else
-            {
-                // العضو associate - إخفاء قناة الأسئلة عنه
-                var hidePermissions = new OverwritePermissions(
-                    viewChannel: PermValue.Deny,
-                    sendMessages: PermValue.Deny,
-                    readMessageHistory: PermValue.Deny,
-                    addReactions: PermValue.Deny,
-                    embedLinks: PermValue.Deny,
-                    attachFiles: PermValue.Deny,
-                    useExternalEmojis: PermValue.Deny
-                );
-                await channel.AddPermissionOverwriteAsync(user, hidePermissions);
-                Console.WriteLine($"[Permission] Hidden channel from associate: {user.Username}");
-            }
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"[SetChannelVisibility Error] {ex.Message}");
-        }
-    }
-
     [SlashCommand("updatepermissions", "تحديث صلاحيات قناة الأسئلة لجميع الأعضاء")]
     public async Task UpdateChannelPermissions()
     {
@@ -1538,6 +1538,94 @@ public class StoryCommands : InteractionModuleBase<SocketInteractionContext>
         }
     }
 
+    private async Task PromoteUserToAssociate(SocketGuildUser user)
+    {
+        try
+        {
+            var associateRoleIdStr = Environment.GetEnvironmentVariable("ASSOCIATE_ROLE_ID");
+            var outsiderRoleIdStr = Environment.GetEnvironmentVariable("OUTSIDER_ROLE_ID");
+            
+            if (ulong.TryParse(associateRoleIdStr, out ulong associateRoleId) && associateRoleId != 0)
+            {
+                var associateRole = user.Guild.GetRole(associateRoleId);
+                if (associateRole != null)
+                {
+                    await user.AddRoleAsync(associateRole);
+                    Console.WriteLine($"[Promotion] Promoted {user.Username} to Associate role");
+                }
+            }
+            
+            if (ulong.TryParse(outsiderRoleIdStr, out ulong outsiderRoleId) && outsiderRoleId != 0)
+            {
+                var outsiderRole = user.Guild.GetRole(outsiderRoleId);
+                if (outsiderRole != null)
+                {
+                    await user.RemoveRoleAsync(outsiderRole);
+                    Console.WriteLine($"[Promotion] Removed Outsider role from {user.Username}");
+                }
+            }
+            
+            // تحديث صلاحيات القناة
+            var cityGatesChannelIdStr = Environment.GetEnvironmentVariable("CITY_GATES_CHANNEL_ID");
+            if (ulong.TryParse(cityGatesChannelIdStr, out ulong cityGatesChannelId) && cityGatesChannelId != 0)
+            {
+                var cityGatesChannel = user.Guild.GetTextChannel(cityGatesChannelId);
+                if (cityGatesChannel != null)
+                {
+                    await SetChannelVisibilityForUser(cityGatesChannel, user, false); // false = ليس outsider
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[PromoteUserToAssociate Error] {ex.Message}");
+        }
+    }
+
+    private async Task SetChannelVisibilityForUser(ITextChannel channel, SocketGuildUser user, bool isOutsider)
+    {
+        try
+        {
+            if (isOutsider)
+            {
+                // العضو outsider - إعطاء صلاحيات كاملة للتفاعل
+                var allowPermissions = new OverwritePermissions(
+                    viewChannel: PermValue.Allow,
+                    sendMessages: PermValue.Allow,
+                    readMessageHistory: PermValue.Allow,
+                    addReactions: PermValue.Allow,
+                    embedLinks: PermValue.Allow,
+                    attachFiles: PermValue.Allow,
+                    useExternalEmojis: PermValue.Allow
+                );
+                await channel.AddPermissionOverwriteAsync(user, allowPermissions);
+                Console.WriteLine($"[Permission] Granted full channel access to outsider: {user.Username}");
+                
+                // تمكين التفاعل مع الأعضاء الآخرين
+                // await EnableUserInteraction(channel, user); // تم إزالة هذه الدالة
+            }
+            else
+            {
+                // العضو associate - إخفاء قناة الأسئلة عنه
+                var hidePermissions = new OverwritePermissions(
+                    viewChannel: PermValue.Deny,
+                    sendMessages: PermValue.Deny,
+                    readMessageHistory: PermValue.Deny,
+                    addReactions: PermValue.Deny,
+                    embedLinks: PermValue.Deny,
+                    attachFiles: PermValue.Deny,
+                    useExternalEmojis: PermValue.Deny
+                );
+                await channel.AddPermissionOverwriteAsync(user, hidePermissions);
+                Console.WriteLine($"[Permission] Hidden channel from associate: {user.Username}");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[SetChannelVisibility Error] {ex.Message}");
+        }
+    }
+
     private InviteInfo LoadInviteHistory(ulong userId)
     {
         try
@@ -1653,9 +1741,260 @@ public class StoryCommands : InteractionModuleBase<SocketInteractionContext>
         await channel.SendMessageAsync(text: user.Mention, embed: embed);
     }
 
+    private async Task GenerateAndSendStory(ITextChannel channel, SocketGuildUser user, Dictionary<string, string> answers)
+    {
+        try
+        {
+            // إنشاء القصة التفصيلية
+            var story = await GenerateStory(
+                answers["ما اسمك الحقيقي؟"],
+                answers["كم عمرك؟"],
+                answers["ما هي اهتماماتك؟"],
+                answers["ما هو تخصصك؟"],
+                answers["ما هي ميزتك؟"],
+                answers["ما هو عيبك؟"],
+                answers["ما هو المكان المفضل لديك؟"],
+                "nnoureldeen6629", // inviterName - أنت من دعاه
+                "The Don", // inviterRole - رولك
+                "قائد العائلة ومؤسس BitMob", // inviterStory - قصتك
+                true // hasInviter - نعم، له مدعو
+            );
 
+            // حفظ القصة
+            await SaveStoryToFile(user.Id, story);
 
+            // إرسال القصة في قناة القصص
+            var familyStoriesChannelIdStr = Environment.GetEnvironmentVariable("FAMILY_STORIES_CHANNEL_ID");
+            Console.WriteLine($"[Debug] FAMILY_STORIES_CHANNEL_ID raw value: '{familyStoriesChannelIdStr}'");
+            
+            // تنظيف القيمة من أي نصوص إضافية
+            var cleanChannelId = familyStoriesChannelIdStr?.Split('#')[0]?.Trim();
+            Console.WriteLine($"[Debug] Cleaned channel ID: '{cleanChannelId}'");
+            
+            if (ulong.TryParse(cleanChannelId, out ulong familyStoriesChannelId) && familyStoriesChannelId != 0)
+            {
+                var familyStoriesChannel = Context.Client.GetChannel(familyStoriesChannelId) as IMessageChannel;
+                if (familyStoriesChannel != null)
+                {
+                    var storyEmbed = new EmbedBuilder()
+                        .WithColor(0x00ff00) // أخضر للمستخدمين مع دعوة
+                        .WithTitle("🎭 قصة جديدة في العائلة")
+                        .WithDescription(story)
+                        .WithFooter($"قصة {user.Username}")
+                        .WithTimestamp(DateTimeOffset.Now)
+                        .Build();
 
+                    await familyStoriesChannel.SendMessageAsync(text: user.Mention, embed: storyEmbed);
+                    Console.WriteLine($"[Story Sent] Story sent to family stories channel for user {user.Username}");
+                    
+                    // إرسال رسالة تأكيد في قناة الأسئلة
+                    await channel.SendMessageAsync(text: user.Mention, embed: new EmbedBuilder()
+                        .WithColor(0x00ff00)
+                        .WithTitle("✅ تم إرسال القصة")
+                        .WithDescription($"تم إرسال قصتك إلى قناة القصص بنجاح!")
+                        .Build());
+                }
+                else
+                {
+                    Console.WriteLine($"[Error] Family stories channel not found: {familyStoriesChannelId}");
+                    
+                    // إرسال رسالة خطأ في قناة الأسئلة
+                    await channel.SendMessageAsync(text: user.Mention, embed: new EmbedBuilder()
+                        .WithColor(0xff0000)
+                        .WithTitle("❌ خطأ في إرسال القصة")
+                        .WithDescription("لم يتم العثور على قناة القصص. تواصل مع الإدارة.")
+                        .Build());
+                }
+            }
+            else
+            {
+                Console.WriteLine($"[Error] FAMILY_STORIES_CHANNEL_ID not configured: {familyStoriesChannelIdStr}");
+            }
+
+            // رسالة نجاح
+            await channel.SendMessageAsync(text: user.Mention, embed: new EmbedBuilder()
+                .WithColor(0x00ff00)
+                .WithTitle("🎉 تم إنشاء قصتك بنجاح!")
+                .WithDescription("تم إرسال قصتك إلى قناة القصص.\nتم ترقيتك إلى رول Associate.")
+                .Build());
+
+            // ترقية العضو
+            await PromoteUserToAssociate(user);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[Generate Story Error] {ex.Message}");
+            // await LogError("Story Generation Error", ex.Message, $"Failed to generate story for user {user.Username}");
+            
+            await channel.SendMessageAsync(text: user.Mention, embed: new EmbedBuilder()
+                .WithColor(0xff0000)
+                .WithTitle("❌ خطأ")
+                .WithDescription("حدث خطأ أثناء إنشاء القصة. حاول مرة أخرى.")
+                .Build());
+        }
+    }
+
+    private async Task SaveStoryToFile(ulong userId, string story)
+    {
+        try
+        {
+            const string StoriesFile = "stories.json";
+            var stories = new Dictionary<ulong, string>();
+
+            if (File.Exists(StoriesFile))
+            {
+                var content = File.ReadAllText(StoriesFile);
+                if (!string.IsNullOrEmpty(content))
+                {
+                    stories = JsonConvert.DeserializeObject<Dictionary<ulong, string>>(content) ?? new Dictionary<ulong, string>();
+                }
+            }
+
+            stories[userId] = story;
+            File.WriteAllText(StoriesFile, JsonConvert.SerializeObject(stories, Formatting.Indented));
+            Console.WriteLine($"[Save Story] Story saved for user {userId}");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[Save Story Error] {ex.Message}");
+        }
+    }
+
+    private async Task<string> GenerateStory(
+        string name, string age, string interest, string specialty,
+        string strength, string weakness, string place,
+        string inviterName, string inviterRole, string inviterStory, bool hasInviter)
+    {
+        string prompt;
+        
+        if (hasInviter)
+        {
+            prompt = $@"
+أنت كاتب قصص Roleplay لعالم المافيا في سيرفر Discord اسمه ""BitMob""، 
+المدينة اسمها ""The Underworld""، مليئة بالأماكن: Coding Alley، Debuggers Street، 
+The Underworld Casino، Don's Office، The Underworld Academy، Police HQ، Black Market، 
+Hidden Docks، Tech Lab، Abandoned Warehouse، والمزيد.
+
+السيرفر يحتوي على الرولز التالية مع الطبقية:
+- The Don: رأس العصابة، أعلى سلطة.
+- Consigliere: المستشار المقرب للـ Don.
+- The Don's Kin: أفراد العائلة المقربة للـ Don.
+- Associate: أعضاء معتمدين في العصابة.
+- Outsider: أشخاص خارج العصابة لكن لهم تواصل محدود.
+- Shady Snitch: العملاء أو المخبرين اللي عندهم معلومات سرية، هذا **رول وليس اسم شخص**.
+
+مهمتك: ابتكر قصة قصيرة وحماسية لهذا العضو الجديد بحيث تكون **ديناميكية ومليئة بالمصادفات والأحداث المافياوية**، مع **لمسة هزلية/ساخرة** خفيفة.  
+ركز على العضو الجديد والشخص الذي دعاه، واجعل القصة مختلفة عن أي قصة سابقة.
+
+المطلوب في القصة:
+1. الاسم المستعار بأسلوب مافياوي، مرتبط بصفات العضو أو مهارته، ويكون مستوحى أو قريب من اسمه الحقيقي.
+2. خلفية درامية: العضو لم ينضم بسهولة، بل حدث موقف مثير أو اكتشافه بواسطة أحد رجال العصابة أو مهمة خطرة أو مطاردة أو تحدي في المدينة.
+3. دمج الشخص الذي دعاه، الرول الخاص به، وقصته السابقة داخل أحداث القصة بشكل مباشر.
+4. الأحداث يجب أن تكون مشوقة، مليئة بمصطلحات المافيا: عمليات سرية، تهديدات، ملاحقات، اختراقات، لقاءات مع رجال العصابة، مخططات.
+5. أضف لمسات برمجية بسيطة: العضو قد يستخدم مهارات برمجية أو اختراقية لإنقاذ الموقف أو اكتشاف سر، لكن **الأحداث المافياوية تظل محور القصة**.
+6. النهاية: العضو يتم قبوله في العصابة ويحصل على مكانه الأولي في المدينة بناءً على الرولز، ويكون دوره واضح في المكان الذي يليق بمهاراته.
+7. القصة يجب أن تكون **قصيرة، ممتعة، مليئة بالمفاجآت، وذات طابع هزلي خفيف**، مع الحفاظ على الجو المافيوي.
+
+معلومات العضو الجديد:
+- الاسم: {name}
+- السن: {age}
+- الاهتمامات: {interest}
+- التخصص: {specialty}
+- الميزة: {strength}
+- العيب: {weakness}
+- المكان المفضل: {place}
+
+معلومات الشخص الذي دعاه:
+- الاسم المستعار: {inviterName}
+- الرول: {inviterRole}
+- قصته السابقة: {inviterStory}
+";
+        }
+        else
+        {
+            prompt = $@"
+أنت كاتب قصص Roleplay لعالم المافيا في سيرفر Discord اسمه ""BitMob""، 
+المدينة اسمها ""The Underworld""، مليئة بالأماكن: Coding Alley، Debuggers Street، 
+The Underworld Casino، Don's Office، The Underworld Academy، Police HQ، Black Market، 
+Hidden Docks، Tech Lab، Abandoned Warehouse، والمزيد.
+
+السيرفر يحتوي على الرولز التالية مع الطبقية:
+- The Don: رأس العصابة، أعلى سلطة.
+- Consigliere: المستشار المقرب للـ Don.
+- The Don's Kin: أفراد العائلة المقربة للـ Don.
+- Associate: أعضاء معتمدين في العصابة.
+- Outsider: أشخاص خارج العصابة لكن لهم تواصل محدود.
+- Shady Snitch: العملاء أو المخبرين اللي عندهم معلومات سرية، هذا **رول وليس اسم شخص**.
+
+مهمتك: ابتكر قصة لهذا المستخدم المجهول الذي انضم بدون دعوة. بما أنه ما عندوش مدعو، اكتب قصة غامضة عن كيفية اكتشافه للسيرفر أو العثور عليه من قبل العائلة.
+
+المطلوب في القصة:
+1. الاسم المستعار بأسلوب مافياوي، مرتبط بصفات العضو أو مهارته، ويكون مستوحى أو قريب من اسمه الحقيقي.
+2. خلفية غامضة: كيف اكتشف هذا الشخص المجهول السيرفر؟ هل تم العثور عليه من قبل أفراد العائلة؟ هل تعثر في شيء سري؟
+3. القصة يجب أن تكون أكثر غموضاً وحذراً بما أنه ما عندهوش صلة معروفة.
+4. الأحداث يجب أن تكون مشوقة، مليئة بمصطلحات المافيا: عمليات سرية، تهديدات، ملاحقات، اختراقات، لقاءات مع رجال العصابة، مخططات.
+5. أضف لمسات برمجية بسيطة: العضو قد يستخدم مهارات برمجية أو اختراقية لإنقاذ الموقف أو اكتشاف سر، لكن **الأحداث المافياوية تظل محور القصة**.
+6. النهاية: العضو يتم إعطاؤه فرصة لإثبات نفسه لكن يبدأ كـ Outsider بسبب عدم وجود دعوة.
+7. القصة يجب أن تكون **قصيرة، ممتعة، مليئة بالمفاجآت، وذات طابع هزلي خفيف**، مع الحفاظ على الجو المافيوي.
+
+معلومات العضو المجهول:
+- الاسم: {name}
+- السن: {age}
+- الاهتمامات: {interest}
+- التخصص: {specialty}
+- الميزة: {strength}
+- العيب: {weakness}
+- المكان المفضل: {place}
+
+ملاحظة: هذا المستخدم انضم بدون دعوة، لذا يعتبر مجهول وغامض.
+";
+        }
+
+        try
+        {
+            var client = new RestClient("https://api.openai.com/v1/chat/completions");
+            var request = new RestRequest("", Method.Post);
+            request.AddHeader("Authorization", $"Bearer {Environment.GetEnvironmentVariable("OPENAI_KEY")}");
+            request.AddHeader("Content-Type", "application/json");
+
+            var body = new
+            {
+                model = "gpt-4o-mini",
+                messages = new object[]
+                {
+                    new { role = "user", content = prompt }
+                },
+                max_tokens = 800,
+                temperature = 0.7
+            };
+
+            request.AddJsonBody(body);
+
+            var response = await client.ExecuteAsync(request);
+
+            Console.WriteLine("[OpenAI] HTTP Status: " + response.StatusCode);
+            Console.WriteLine("[OpenAI] Response content: " + response.Content);
+
+            if (!response.IsSuccessful)
+            {
+                return $"حصلت مشكلة أثناء توليد القصة (OpenAI). كود: {(int)response.StatusCode}";
+            }
+
+            var json = JObject.Parse(response.Content);
+            var content = json["choices"]?[0]?["message"]?["content"]?.ToString()
+                ?? json["choices"]?[0]?["text"]?.ToString();
+
+            if (string.IsNullOrWhiteSpace(content))
+                return "مافيش محتوى راجع من الـ AI.";
+
+            return content.Trim();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine("[OpenAI Exception] " + ex);
+            return "حصل خطأ غير متوقع أثناء توليد القصة.";
+        }
+    }
 }
 
 // Invite Information Class
