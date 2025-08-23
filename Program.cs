@@ -11,6 +11,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Discord.Rest;
 using DotNetEnv;
+
 using System.Net;
 using System.Text;
 
@@ -23,6 +24,7 @@ class Program
     string _ChatGPTApiKey = "";
     
     // Configuration - Load from environment variables for security
+
     private ulong familyStoriesChannelId;
     private ulong cityGatesChannelId; // قناة City Gates للأسئلة
     private ulong ownerId; // ID الـ Owner
@@ -30,11 +32,13 @@ class Program
     private ulong associateRoleId;
     private ulong outsiderRoleId;
     private const string StoriesFile = "stories.json";
+
     private const string InviteHistoryFile = "invite_history.json";
 
     static async Task Main(string[] args)
     {
         var program = new Program();
+
         await program.StartBotAsync();
     }
 
@@ -43,6 +47,7 @@ class Program
         try
         {
             Console.WriteLine("[Bot] Starting Discord bot...");
+
             
             // Start HTTP server for Render
             _ = Task.Run(() => StartHttpServer());
@@ -55,10 +60,12 @@ class Program
         }
     }
 
+
     private async Task StartHttpServer()
     {
         try
         {
+
             var port = Environment.GetEnvironmentVariable("PORT") ?? "8080";
             Console.WriteLine($"[HTTP Server] Starting simple HTTP server on port {port}");
             
@@ -132,6 +139,7 @@ class Program
         }
         catch (Exception ex)
         {
+
             Console.WriteLine($"[HTTP Request Error] {ex}");
         }
         finally
@@ -166,6 +174,7 @@ class Program
 
         _client.Log += LogAsync;
         _client.Ready += ReadyAsync;
+
         // إزالة UserJoined event - النظام الجديد يعتمد على /start command
         // _client.UserJoined += async (user) =>
         // {
@@ -250,6 +259,7 @@ class Program
             Console.WriteLine($"[Ready] {_client.CurrentUser} is connected!");
         }
 
+
         // تسجيل الأوامر بعد الاتصال
         await RegisterCommandsAsync();
     }
@@ -283,6 +293,7 @@ class Program
             await LogError("Role Assignment Error", ex.Message, $"Failed to assign {roleName} role to {user.Username}");
         }
     }
+
 
 
 
@@ -520,15 +531,18 @@ Hidden Docks، Tech Lab، Abandoned Warehouse، والمزيد.
                 ? JsonConvert.DeserializeObject<Dictionary<ulong, string>>(File.ReadAllText(StoriesFile))
                 : new Dictionary<ulong, string>();
 
+
             if (stories == null)
                 stories = new Dictionary<ulong, string>();
 
             stories[userId] = story;
             File.WriteAllText(StoriesFile, JsonConvert.SerializeObject(stories, Formatting.Indented));
+
             Console.WriteLine($"[SaveStory] Story saved for user {userId}");
         }
         catch (Exception ex)
         {
+
             Console.WriteLine($"[SaveStory Error] {ex.Message}");
         }
     }
@@ -566,10 +580,12 @@ Hidden Docks، Tech Lab، Abandoned Warehouse، والمزيد.
         }
         catch (Exception ex)
         {
+
             Console.WriteLine($"[LoadStory Error] {ex.Message}");
             return "";
         }
     }
+
 
     private void SaveInviteHistory(ulong userId, string inviterName, ulong inviterId, string inviteCode, DateTime joinDate)
     {
@@ -626,6 +642,7 @@ Hidden Docks، Tech Lab، Abandoned Warehouse، والمزيد.
         try
         {
             // Load channel and role IDs from environment variables
+
             var familyStoriesChannelIdStr = Environment.GetEnvironmentVariable("FAMILY_STORIES_CHANNEL_ID");
             var cityGatesChannelIdStr = Environment.GetEnvironmentVariable("CITY_GATES_CHANNEL_ID");
             var ownerIdStr = Environment.GetEnvironmentVariable("OWNER_ID");
@@ -633,24 +650,30 @@ Hidden Docks، Tech Lab، Abandoned Warehouse، والمزيد.
             var associateRoleIdStr = Environment.GetEnvironmentVariable("ASSOCIATE_ROLE_ID");
             var outsiderRoleIdStr = Environment.GetEnvironmentVariable("OUTSIDER_ROLE_ID");
 
+
             if (ulong.TryParse(familyStoriesChannelIdStr, out ulong familyStoriesId))
             {
+
                 familyStoriesChannelId = familyStoriesId;
                 Console.WriteLine($"[Config] Family Stories channel ID loaded: {familyStoriesChannelId}");
             }
             else
             {
+
                 Console.WriteLine("[Config Warning] FAMILY_STORIES_CHANNEL_ID not found or invalid. Stories won't be posted to channels.");
                 familyStoriesChannelId = 0;
             }
 
+
             if (ulong.TryParse(cityGatesChannelIdStr, out ulong cityGatesId))
             {
+
                 cityGatesChannelId = cityGatesId;
                 Console.WriteLine($"[Config] City Gates channel ID loaded: {cityGatesChannelId}");
             }
             else
             {
+
                 Console.WriteLine("[Config Error] CITY_GATES_CHANNEL_ID not found or invalid. Onboarding won't work without this!");
                 cityGatesChannelId = 0;
             }
@@ -716,14 +739,17 @@ public class StoryCommands : InteractionModuleBase<SocketInteractionContext>
         {
             await DeferAsync();
 
+
             // البحث عن قصة العضو في قناة القصص
             var story = await LoadStoryAsync(user.Id);
             
             if (string.IsNullOrEmpty(story))
             {
+
                 await FollowupAsync($"❌ لا توجد قصة لـ {user.Mention} في قناة القصص");
                 return;
             }
+
 
             // إنشاء Embed منسق للقصة
             var storyEmbed = new EmbedBuilder()
@@ -854,6 +880,7 @@ public class StoryCommands : InteractionModuleBase<SocketInteractionContext>
             }
             else
             {
+
                 // لا توجد معلومات محفوظة عن الدعوة
                 inviterInfo = "غير معروف (لا توجد معلومات محفوظة)";
             }
@@ -873,6 +900,7 @@ public class StoryCommands : InteractionModuleBase<SocketInteractionContext>
         }
         catch (Exception ex)
         {
+
             Console.WriteLine($"[Invite Command Error] {ex}");
             Console.WriteLine($"[Error] Invite Command Error: {ex.Message}");
             
@@ -1371,6 +1399,7 @@ public class StoryCommands : InteractionModuleBase<SocketInteractionContext>
         try
         {
             const string StoriesFile = "stories.json";
+
             if (!File.Exists(StoriesFile)) return;
             
             var stories = JsonConvert.DeserializeObject<Dictionary<ulong, string>>(File.ReadAllText(StoriesFile));
@@ -1384,6 +1413,7 @@ public class StoryCommands : InteractionModuleBase<SocketInteractionContext>
         }
         catch (Exception ex)
         {
+
             Console.WriteLine($"[DeleteStoryFromFile Error] {ex.Message}");
         }
     }
@@ -1581,31 +1611,6 @@ public class StoryCommands : InteractionModuleBase<SocketInteractionContext>
                 .WithTitle("❌ خطأ")
                 .WithDescription("حدث خطأ أثناء إنشاء القصة. حاول مرة أخرى.")
                 .Build());
-        }
-    }
-
-    private async Task<string> GenerateStoryFromAnswers(Dictionary<string, string> answers, string username)
-    {
-        try
-        {
-            var story = $"🎭 **قصة {username}**\n\n";
-            story += $"**الاسم:** {answers["ما اسمك الحقيقي؟"]}\n";
-            story += $"**العمر:** {answers["كم عمرك؟"]}\n";
-            story += $"**الاهتمامات:** {answers["ما هي اهتماماتك؟"]}\n";
-            story += $"**التخصص:** {answers["ما هو تخصصك؟"]}\n";
-            story += $"**الميزة:** {answers["ما هي ميزتك؟"]}\n";
-            story += $"**العيب:** {answers["ما هو عيبك؟"]}\n";
-            story += $"**المكان المفضل:** {answers["ما هو المكان المفضل لديك؟"]}\n\n";
-            story += "🌟 مرحباً بك في عائلة BitMob!";
-
-            return story;
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"[Generate Story From Answers Error] {ex.Message}");
-            Console.WriteLine($"[Error] Story Generation from Answers Error: {ex.Message}");
-            
-            return $"🎭 **قصة {username}**\n\nحدث خطأ أثناء إنشاء القصة التفصيلية، لكن مرحباً بك في عائلة BitMob! 🌟";
         }
     }
 
