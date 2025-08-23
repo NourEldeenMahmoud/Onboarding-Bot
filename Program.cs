@@ -915,14 +915,21 @@ public class StoryCommands : InteractionModuleBase<SocketInteractionContext>
     {
         try
         {
-            // فحص أن التفاعل لا يزال صالحاً
-            if (!Context.Interaction.IsValidToken)
+            try
             {
-                await FollowupAsync("❌ انتهت صلاحية التفاعل. استخدم الأمر مرة أخرى.");
+                await DeferAsync();
+            }
+            catch (Discord.Net.HttpException ex) when (ex.DiscordCode == 10062)
+            {
+                // تجاهل خطأ Unknown interaction - شائع في Render.com
+                Console.WriteLine($"[Warning] Unknown interaction error for user {Context.User.Username} - continuing anyway");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[Error] Failed to defer interaction: {ex.Message}");
+                await FollowupAsync("❌ حدث خطأ في التفاعل. حاول مرة أخرى.");
                 return;
             }
-
-            await DeferAsync();
 
             var user = Context.User as SocketGuildUser;
             if (user == null)
@@ -1508,7 +1515,13 @@ public class StoryCommands : InteractionModuleBase<SocketInteractionContext>
 
             // إرسال القصة في قناة القصص
             var familyStoriesChannelIdStr = Environment.GetEnvironmentVariable("FAMILY_STORIES_CHANNEL_ID");
-            if (ulong.TryParse(familyStoriesChannelIdStr, out ulong familyStoriesChannelId) && familyStoriesChannelId != 0)
+            Console.WriteLine($"[Debug] FAMILY_STORIES_CHANNEL_ID raw value: '{familyStoriesChannelIdStr}'");
+            
+            // تنظيف القيمة من أي نصوص إضافية
+            var cleanChannelId = familyStoriesChannelIdStr?.Split('#')[0]?.Trim();
+            Console.WriteLine($"[Debug] Cleaned channel ID: '{cleanChannelId}'");
+            
+            if (ulong.TryParse(cleanChannelId, out ulong familyStoriesChannelId) && familyStoriesChannelId != 0)
             {
                 var familyStoriesChannel = Context.Client.GetChannel(familyStoriesChannelId) as IMessageChannel;
                 if (familyStoriesChannel != null)
@@ -1523,10 +1536,24 @@ public class StoryCommands : InteractionModuleBase<SocketInteractionContext>
 
                     await familyStoriesChannel.SendMessageAsync(text: user.Mention, embed: storyEmbed);
                     Console.WriteLine($"[Story Sent] Story sent to family stories channel for user {user.Username}");
+                    
+                    // إرسال رسالة تأكيد في قناة الأسئلة
+                    await channel.SendMessageAsync(text: user.Mention, embed: new EmbedBuilder()
+                        .WithColor(0x00ff00)
+                        .WithTitle("✅ تم إرسال القصة")
+                        .WithDescription($"تم إرسال قصتك إلى قناة القصص بنجاح!")
+                        .Build());
                 }
                 else
                 {
                     Console.WriteLine($"[Error] Family stories channel not found: {familyStoriesChannelId}");
+                    
+                    // إرسال رسالة خطأ في قناة الأسئلة
+                    await channel.SendMessageAsync(text: user.Mention, embed: new EmbedBuilder()
+                        .WithColor(0xff0000)
+                        .WithTitle("❌ خطأ في إرسال القصة")
+                        .WithDescription("لم يتم العثور على قناة القصص. تواصل مع الإدارة.")
+                        .Build());
                 }
             }
             else
