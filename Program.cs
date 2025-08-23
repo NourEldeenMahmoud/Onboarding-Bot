@@ -278,6 +278,14 @@ class Program
             }
             
             _processedUsers.Add(user.Id);
+            
+            // إزالة المستخدم من القائمة بعد 30 ثانية لمنع التكرار الدائم
+            _ = Task.Run(async () =>
+            {
+                await Task.Delay(30000); // 30 ثانية
+                _processedUsers.Remove(user.Id);
+                Console.WriteLine($"[Info] Removed {user.Username} from processed users list");
+            });
             Console.WriteLine($"[UserJoined] {user.Username} joined.");
 
             var guild = user.Guild;
@@ -772,13 +780,15 @@ class Program
     {
         try
         {
+            // إعطاء المستخدم صلاحية رؤية القناة والكتابة فيها
             var permissionOverwrite = new OverwritePermissions(
+                viewChannel: PermValue.Allow,
                 sendMessages: PermValue.Allow,
-                viewChannel: PermValue.Allow
+                readMessageHistory: PermValue.Allow
             );
             
             await channel.AddPermissionOverwriteAsync(user, permissionOverwrite);
-            Console.WriteLine($"[Info] Gave write permission to {user.Username} in join channel");
+            Console.WriteLine($"[Info] Gave full access to {user.Username} in join channel");
         }
         catch (Exception ex)
         {
@@ -791,8 +801,15 @@ class Program
     {
         try
         {
-            await channel.RemovePermissionOverwriteAsync(user);
-            Console.WriteLine($"[Info] Removed write permission from {user.Username} in join channel");
+            // إزالة جميع الصلاحيات من المستخدم
+            var permissionOverwrite = new OverwritePermissions(
+                viewChannel: PermValue.Deny,
+                sendMessages: PermValue.Deny,
+                readMessageHistory: PermValue.Deny
+            );
+            
+            await channel.AddPermissionOverwriteAsync(user, permissionOverwrite);
+            Console.WriteLine($"[Info] Removed all access from {user.Username} in join channel");
         }
         catch (Exception ex)
         {
@@ -852,16 +869,6 @@ class Program
             // إرسال الرسالة التوجيهية فقط
             await channel.SendMessageAsync(text: user.Mention, embed: infoEmbed);
             
-            // إرسال رسالة تحذير للباقي
-            var warningEmbed = new EmbedBuilder()
-                .WithColor(0xff6b35) // لون برتقالي
-                .WithDescription("🔒 **رسالة خاصة**\nهذه الرسالة مخصصة لعضو معين والأدمن فقط.")
-                .WithFooter("لا يمكنك رؤية المحتوى")
-                .WithTimestamp(DateTimeOffset.Now)
-                .Build();
-                
-            await channel.SendMessageAsync(embed: warningEmbed);
-            
             Console.WriteLine($"[Info] Story completion message sent to {user.Username}");
             
             // انتظار قليل قبل حذف الرسائل
@@ -916,31 +923,20 @@ class Program
     {
         try
         {
-            // إنشاء Embed مع رسالة خاصة
+            // إنشاء Embed بسيط
             var embed = new EmbedBuilder()
                 .WithColor(0x2f3136) // لون رمادي داكن
                 .WithDescription(message)
-                .WithFooter($"🔒 هذه الرسالة مرئية فقط لـ {user.Username} والأدمن")
                 .WithTimestamp(DateTimeOffset.Now)
                 .Build();
 
-            // إرسال الرسالة مع منشن للعضو فقط
+            // إرسال الرسالة مع منشن للعضو
             await channel.SendMessageAsync(
                 text: user.Mention, 
                 embed: embed
             );
             
-            Console.WriteLine($"[Info] Private message sent to join channel for {user.Username}: {message.Substring(0, Math.Min(50, message.Length))}...");
-            
-            // إرسال رسالة تحذير للباقي
-            var warningEmbed = new EmbedBuilder()
-                .WithColor(0xff6b35) // لون برتقالي
-                .WithDescription("🔒 **رسالة خاصة**\nهذه الرسالة مخصصة لعضو معين والأدمن فقط.")
-                .WithFooter("لا يمكنك رؤية المحتوى")
-                .WithTimestamp(DateTimeOffset.Now)
-                .Build();
-                
-            await channel.SendMessageAsync(embed: warningEmbed);
+            Console.WriteLine($"[Info] Message sent to join channel for {user.Username}: {message.Substring(0, Math.Min(50, message.Length))}...");
         }
         catch (Exception ex)
         {
