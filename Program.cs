@@ -915,6 +915,13 @@ public class StoryCommands : InteractionModuleBase<SocketInteractionContext>
     {
         try
         {
+            // فحص أن التفاعل لا يزال صالحاً
+            if (!Context.Interaction.IsValidToken)
+            {
+                await FollowupAsync("❌ انتهت صلاحية التفاعل. استخدم الأمر مرة أخرى.");
+                return;
+            }
+
             await DeferAsync();
 
             var user = Context.User as SocketGuildUser;
@@ -1415,6 +1422,7 @@ public class StoryCommands : InteractionModuleBase<SocketInteractionContext>
 
             // إرسال السؤال الأول
             await SendQuestion(channel, user, questions[currentQuestionIndex], currentQuestionIndex + 1, questions.Length);
+            Console.WriteLine($"[Onboarding] Started questions for user {user.Username}");
 
             // مراقبة الرسائل لمدة 5 دقائق
             var timeout = DateTime.Now.AddMinutes(5);
@@ -1431,8 +1439,8 @@ public class StoryCommands : InteractionModuleBase<SocketInteractionContext>
                     messageReceived = true;
                     answers[questions[currentQuestionIndex]] = userMessage.Content;
 
-                    // حذف رسالة المستخدم
-                    await userMessage.DeleteAsync();
+                    // لا نحذف رسالة المستخدم - نتركها
+                    Console.WriteLine($"[Answer] User {user.Username} answered: {userMessage.Content}");
 
                     currentQuestionIndex++;
 
@@ -1514,7 +1522,16 @@ public class StoryCommands : InteractionModuleBase<SocketInteractionContext>
                         .Build();
 
                     await familyStoriesChannel.SendMessageAsync(text: user.Mention, embed: storyEmbed);
+                    Console.WriteLine($"[Story Sent] Story sent to family stories channel for user {user.Username}");
                 }
+                else
+                {
+                    Console.WriteLine($"[Error] Family stories channel not found: {familyStoriesChannelId}");
+                }
+            }
+            else
+            {
+                Console.WriteLine($"[Error] FAMILY_STORIES_CHANNEL_ID not configured: {familyStoriesChannelIdStr}");
             }
 
             // رسالة نجاح
