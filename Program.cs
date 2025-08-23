@@ -346,6 +346,7 @@ class Program
             if (hasInviter && inviterUser != null)
             {
                 inviterName = !string.IsNullOrEmpty(inviterUser.Nickname) ? inviterUser.Nickname : inviterUser.Username;
+                Console.WriteLine($"[Invite Info] Inviter name resolved: {inviterName} (Nickname: {inviterUser.Nickname ?? "None"}, Username: {inviterUser.Username})");
             }
             
             var inviterRole = hasInviter && inviterUser != null ? inviterUser.Roles
@@ -411,7 +412,6 @@ class Program
             if (newMemberJoinChannel == null)
             {
                 Console.WriteLine("[Warning] Join Family channel not found, onboarding cancelled");
-                await LogError("Join Channel Error", "Join Family channel not found", $"User {user.Username} could not be onboarded");
                 return;
             }
 
@@ -849,11 +849,18 @@ class Program
                 .WithTimestamp(DateTimeOffset.Now)
                 .Build();
 
-            // الحصول على قائمة المستخدمين المسموح لهم برؤية الرسالة
-            var allowedUsers = GetAllowedUsersForPrivateMessage(user);
-            
             // إرسال الرسالة التوجيهية فقط
-            await channel.SendMessageAsync(text: user.Mention, embed: infoEmbed, allowedMentions: new AllowedMentions { UserIds = allowedUsers });
+            await channel.SendMessageAsync(text: user.Mention, embed: infoEmbed);
+            
+            // إرسال رسالة تحذير للباقي
+            var warningEmbed = new EmbedBuilder()
+                .WithColor(0xff6b35) // لون برتقالي
+                .WithDescription("🔒 **رسالة خاصة**\nهذه الرسالة مخصصة لعضو معين والأدمن فقط.")
+                .WithFooter("لا يمكنك رؤية المحتوى")
+                .WithTimestamp(DateTimeOffset.Now)
+                .Build();
+                
+            await channel.SendMessageAsync(embed: warningEmbed);
             
             Console.WriteLine($"[Info] Story completion message sent to {user.Username}");
             
@@ -909,9 +916,7 @@ class Program
     {
         try
         {
-            // الحصول على قائمة المستخدمين المسموح لهم برؤية الرسالة
-            var allowedUsers = GetAllowedUsersForPrivateMessage(user);
-            
+            // إنشاء Embed مع رسالة خاصة
             var embed = new EmbedBuilder()
                 .WithColor(0x2f3136) // لون رمادي داكن
                 .WithDescription(message)
@@ -919,14 +924,23 @@ class Program
                 .WithTimestamp(DateTimeOffset.Now)
                 .Build();
 
-            // إرسال الرسالة مع تحديد الأذونات
+            // إرسال الرسالة مع منشن للعضو فقط
             await channel.SendMessageAsync(
                 text: user.Mention, 
-                embed: embed, 
-                allowedMentions: new AllowedMentions { UserIds = allowedUsers }
+                embed: embed
             );
             
             Console.WriteLine($"[Info] Private message sent to join channel for {user.Username}: {message.Substring(0, Math.Min(50, message.Length))}...");
+            
+            // إرسال رسالة تحذير للباقي
+            var warningEmbed = new EmbedBuilder()
+                .WithColor(0xff6b35) // لون برتقالي
+                .WithDescription("🔒 **رسالة خاصة**\nهذه الرسالة مخصصة لعضو معين والأدمن فقط.")
+                .WithFooter("لا يمكنك رؤية المحتوى")
+                .WithTimestamp(DateTimeOffset.Now)
+                .Build();
+                
+            await channel.SendMessageAsync(embed: warningEmbed);
         }
         catch (Exception ex)
         {
@@ -1217,8 +1231,8 @@ Hidden Docks، Tech Lab، Abandoned Warehouse، والمزيد.
 
             Console.WriteLine($"[Story Check] Checking if user {userId} has been mentioned in story channel...");
             
-            // البحث في آخر 100 رسالة في قناة القصص
-            var messages = await storyChannel.GetMessagesAsync(100).FlattenAsync();
+            // البحث في آخر 200 رسالة في قناة القصص (زيادة العدد)
+            var messages = await storyChannel.GetMessagesAsync(200).FlattenAsync();
             
             foreach (var message in messages)
             {
@@ -1241,7 +1255,15 @@ Hidden Docks، Tech Lab، Abandoned Warehouse، والمزيد.
                 }
             }
             
-            Console.WriteLine($"[Story Check] No mentions found for user {userId} in story channel");
+            // البحث أيضاً في ملف stories.json كـ backup
+            var savedStory = LoadStory(userId);
+            if (!string.IsNullOrEmpty(savedStory))
+            {
+                Console.WriteLine($"[Story Check] Found saved story for user {userId} in file");
+                return true;
+            }
+            
+            Console.WriteLine($"[Story Check] No mentions found for user {userId} in story channel or file");
             return false;
         }
         catch (Exception ex)
