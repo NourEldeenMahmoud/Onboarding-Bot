@@ -10,6 +10,18 @@ services:
         sync: false
       - key: OPENAI_KEY
         sync: false
+      - key: STORY_CHANNEL_ID
+        sync: false
+      - key: JOIN_FAMILY_CHANNEL_ID
+        sync: false
+      - key: OWNER_ID
+        sync: false
+      - key: LOG_CHANNEL_ID
+        sync: false
+      - key: ASSOCIATE_ROLE_ID
+        sync: false
+      - key: OUTSIDER_ROLE_ID
+        sync: false
       - key: PORT
         value: 8080
 

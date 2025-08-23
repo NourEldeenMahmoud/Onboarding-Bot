@@ -11,6 +11,8 @@ using System.Linq;
 using System.Threading.Tasks;
 using Discord.Rest;
 using DotNetEnv;
+using System.Net;
+using System.Text;
 
 class Program
 {
@@ -42,11 +44,100 @@ class Program
         try
         {
             Console.WriteLine("[Bot] Starting Discord bot...");
+            
+            // Start HTTP server for Render
+            _ = Task.Run(() => StartHttpServer());
+            
             await MainAsync();
         }
         catch (Exception ex)
         {
             Console.WriteLine($"[Bot Error] {ex}");
+        }
+    }
+
+    private async Task StartHttpServer()
+    {
+        try
+        {
+            var port = Environment.GetEnvironmentVariable("PORT") ?? "8080";
+            Console.WriteLine($"[HTTP Server] Starting simple HTTP server on port {port}");
+            
+            // Simple HTTP server using TcpListener
+            var listener = new System.Net.Sockets.TcpListener(System.Net.IPAddress.Any, int.Parse(port));
+            listener.Start();
+            
+            Console.WriteLine($"[HTTP Server] Listening on port {port}");
+            
+            while (true)
+            {
+                var client = await listener.AcceptTcpClientAsync();
+                _ = Task.Run(() => HandleTcpRequest(client));
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[HTTP Server Error] {ex}");
+        }
+    }
+
+    private async Task HandleTcpRequest(System.Net.Sockets.TcpClient client)
+    {
+        try
+        {
+            using var stream = client.GetStream();
+            using var reader = new StreamReader(stream);
+            using var writer = new StreamWriter(stream) { AutoFlush = true };
+            
+            var request = await reader.ReadLineAsync();
+            if (request == null) return;
+            
+            var parts = request.Split(' ');
+            if (parts.Length < 2) return;
+            
+            var method = parts[0];
+            var path = parts[1];
+            
+            string content;
+            string contentType = "text/plain";
+            
+            switch (path)
+            {
+                case "/":
+                    content = "🎭 BitMob Bot is running! The Underworld awaits... 🌃";
+                    break;
+                    
+                case "/health":
+                    content = "✅ Bot is healthy and ready!";
+                    break;
+                    
+                case "/status":
+                    var status = new
+                    {
+                        status = "online",
+                        timestamp = DateTime.UtcNow,
+                        service = "BitMob Discord Bot",
+                        version = "1.0.0"
+                    };
+                    content = JsonConvert.SerializeObject(status);
+                    contentType = "application/json";
+                    break;
+                    
+                default:
+                    content = "404 - Not Found";
+                    break;
+            }
+            
+            var response = $"HTTP/1.1 200 OK\r\nContent-Type: {contentType}\r\nContent-Length: {Encoding.UTF8.GetByteCount(content)}\r\n\r\n{content}";
+            await writer.WriteAsync(response);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[HTTP Request Error] {ex}");
+        }
+        finally
+        {
+            client.Close();
         }
     }
 
@@ -1458,3 +1549,5 @@ public class InviteInfo
     public string InviteCode { get; set; } = "";
     public DateTime JoinDate { get; set; }
 }
+
+
