@@ -738,6 +738,8 @@ public class StoryCommands : InteractionModuleBase<SocketInteractionContext>
         catch (Exception ex)
         {
             Console.WriteLine($"[Story Command Error] {ex}");
+            Console.WriteLine($"[Error] Story Command Error: {ex.Message}");
+            
             await FollowupAsync("❌ حدث خطأ أثناء عرض القصة");
         }
     }
@@ -872,6 +874,8 @@ public class StoryCommands : InteractionModuleBase<SocketInteractionContext>
         catch (Exception ex)
         {
             Console.WriteLine($"[Invite Command Error] {ex}");
+            Console.WriteLine($"[Error] Invite Command Error: {ex.Message}");
+            
             await FollowupAsync("❌ حدث خطأ أثناء عرض معلومات الدعوة");
         }
     }
@@ -900,6 +904,8 @@ public class StoryCommands : InteractionModuleBase<SocketInteractionContext>
         catch (Exception ex)
         {
             Console.WriteLine($"[Delete Story Command Error] {ex}");
+            Console.WriteLine($"[Error] Delete Story Command Error: {ex.Message}");
+            
             await FollowupAsync("❌ حدث خطأ أثناء حذف القصة");
         }
     }
@@ -992,14 +998,7 @@ public class StoryCommands : InteractionModuleBase<SocketInteractionContext>
                 
                 // بدء الأسئلة بعد تأخير قصير
                 _ = Task.Delay(3000).ContinueWith(async _ => {
-                    var firstQuestionEmbed = new EmbedBuilder()
-                        .WithColor(0x5865f2)
-                        .WithTitle("❓ السؤال الأول")
-                        .WithDescription("ما اسمك الحقيقي؟")
-                        .WithFooter("انتظر إجابتك...")
-                        .Build();
-                    
-                    await cityGatesChannel.SendMessageAsync(text: user.Mention, embed: firstQuestionEmbed);
+                    await StartOnboardingQuestions(cityGatesChannel, user);
                 });
                 }
             }
@@ -1007,6 +1006,8 @@ public class StoryCommands : InteractionModuleBase<SocketInteractionContext>
         catch (Exception ex)
         {
             Console.WriteLine($"[Start Command Error] {ex}");
+            Console.WriteLine($"[Error] Join Command Error: {ex.Message}");
+            
             await FollowupAsync("❌ حدث خطأ أثناء بدء عملية الانضمام");
         }
     }
@@ -1390,6 +1391,205 @@ public class StoryCommands : InteractionModuleBase<SocketInteractionContext>
         {
             Console.WriteLine($"[LoadInviteHistory Error] {ex}");
             return null;
+        }
+    }
+
+    private async Task StartOnboardingQuestions(ITextChannel channel, SocketGuildUser user)
+    {
+        try
+        {
+            // قائمة الأسئلة
+            var questions = new[]
+            {
+                "ما اسمك الحقيقي؟",
+                "كم عمرك؟",
+                "ما هي اهتماماتك؟",
+                "ما هو تخصصك؟",
+                "ما هي ميزتك؟",
+                "ما هو عيبك؟",
+                "ما هو المكان المفضل لديك؟"
+            };
+
+            var answers = new Dictionary<string, string>();
+            var currentQuestionIndex = 0;
+
+            // إرسال السؤال الأول
+            await SendQuestion(channel, user, questions[currentQuestionIndex], currentQuestionIndex + 1, questions.Length);
+
+            // مراقبة الرسائل لمدة 5 دقائق
+            var timeout = DateTime.Now.AddMinutes(5);
+            var messageReceived = false;
+
+            while (DateTime.Now < timeout && currentQuestionIndex < questions.Length)
+            {
+                // انتظار رسالة من المستخدم
+                var messages = await channel.GetMessagesAsync(10).FlattenAsync();
+                var userMessage = messages.FirstOrDefault(m => m.Author.Id == user.Id && m.Timestamp > DateTimeOffset.Now.AddSeconds(-30));
+
+                if (userMessage != null && !messageReceived)
+                {
+                    messageReceived = true;
+                    answers[questions[currentQuestionIndex]] = userMessage.Content;
+
+                    // حذف رسالة المستخدم
+                    await userMessage.DeleteAsync();
+
+                    currentQuestionIndex++;
+
+                    if (currentQuestionIndex < questions.Length)
+                    {
+                        // إرسال السؤال التالي
+                        await SendQuestion(channel, user, questions[currentQuestionIndex], currentQuestionIndex + 1, questions.Length);
+                        messageReceived = false;
+                    }
+                    else
+                    {
+                        // انتهت الأسئلة - إنشاء القصة
+                        await GenerateAndSendStory(channel, user, answers);
+                        break;
+                    }
+                }
+
+                await Task.Delay(1000); // انتظار ثانية واحدة
+            }
+
+            if (currentQuestionIndex < questions.Length)
+            {
+                // انتهت المهلة
+                await channel.SendMessageAsync(text: user.Mention, embed: new EmbedBuilder()
+                    .WithColor(0xff0000)
+                    .WithTitle("⏰ انتهت المهلة")
+                    .WithDescription("انتهت مهلة الإجابة على الأسئلة.\nاستخدم `/join` مرة أخرى لبدء العملية من جديد.")
+                    .Build());
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[Onboarding Questions Error] {ex.Message}");
+            Console.WriteLine($"[Error] Onboarding Questions Error: {ex.Message}");
+            
+            await channel.SendMessageAsync(text: user.Mention, embed: new EmbedBuilder()
+                .WithColor(0xff0000)
+                .WithTitle("❌ خطأ")
+                .WithDescription("حدث خطأ أثناء الأسئلة. حاول مرة أخرى.")
+                .Build());
+        }
+    }
+
+    private async Task SendQuestion(ITextChannel channel, SocketGuildUser user, string question, int questionNumber, int totalQuestions)
+    {
+        var embed = new EmbedBuilder()
+            .WithColor(0x5865f2)
+            .WithTitle($"❓ السؤال {questionNumber} من {totalQuestions}")
+            .WithDescription(question)
+            .WithFooter("اكتب إجابتك في هذه القناة")
+            .Build();
+
+        await channel.SendMessageAsync(text: user.Mention, embed: embed);
+    }
+
+    private async Task GenerateAndSendStory(ITextChannel channel, SocketGuildUser user, Dictionary<string, string> answers)
+    {
+        try
+        {
+            // إنشاء القصة
+            var story = await GenerateStoryFromAnswers(answers, user.Username);
+
+            // حفظ القصة
+            await SaveStoryToFile(user.Id, story);
+
+            // إرسال القصة في قناة القصص
+            var familyStoriesChannelIdStr = Environment.GetEnvironmentVariable("FAMILY_STORIES_CHANNEL_ID");
+            if (ulong.TryParse(familyStoriesChannelIdStr, out ulong familyStoriesChannelId) && familyStoriesChannelId != 0)
+            {
+                var familyStoriesChannel = Context.Client.GetChannel(familyStoriesChannelId) as IMessageChannel;
+                if (familyStoriesChannel != null)
+                {
+                    var storyEmbed = new EmbedBuilder()
+                        .WithColor(0xff6b35) // برتقالي للمستخدمين بدون دعوة
+                        .WithTitle("🎭 قصة جديدة في العائلة")
+                        .WithDescription(story)
+                        .WithFooter($"قصة {user.Username}")
+                        .WithTimestamp(DateTimeOffset.Now)
+                        .Build();
+
+                    await familyStoriesChannel.SendMessageAsync(text: user.Mention, embed: storyEmbed);
+                }
+            }
+
+            // رسالة نجاح
+            await channel.SendMessageAsync(text: user.Mention, embed: new EmbedBuilder()
+                .WithColor(0x00ff00)
+                .WithTitle("🎉 تم إنشاء قصتك بنجاح!")
+                .WithDescription("تم إرسال قصتك إلى قناة القصص.\nتم ترقيتك إلى رول Associate.")
+                .Build());
+
+            // ترقية العضو
+            await PromoteUserToAssociate(user);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[Generate Story Error] {ex.Message}");
+            Console.WriteLine($"[Error] Story Generation Error: {ex.Message}");
+            
+            await channel.SendMessageAsync(text: user.Mention, embed: new EmbedBuilder()
+                .WithColor(0xff0000)
+                .WithTitle("❌ خطأ")
+                .WithDescription("حدث خطأ أثناء إنشاء القصة. حاول مرة أخرى.")
+                .Build());
+        }
+    }
+
+    private async Task<string> GenerateStoryFromAnswers(Dictionary<string, string> answers, string username)
+    {
+        try
+        {
+            var story = $"🎭 **قصة {username}**\n\n";
+            story += $"**الاسم:** {answers["ما اسمك الحقيقي؟"]}\n";
+            story += $"**العمر:** {answers["كم عمرك؟"]}\n";
+            story += $"**الاهتمامات:** {answers["ما هي اهتماماتك؟"]}\n";
+            story += $"**التخصص:** {answers["ما هو تخصصك؟"]}\n";
+            story += $"**الميزة:** {answers["ما هي ميزتك؟"]}\n";
+            story += $"**العيب:** {answers["ما هو عيبك؟"]}\n";
+            story += $"**المكان المفضل:** {answers["ما هو المكان المفضل لديك؟"]}\n\n";
+            story += "🌟 مرحباً بك في عائلة BitMob!";
+
+            return story;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[Generate Story From Answers Error] {ex.Message}");
+            Console.WriteLine($"[Error] Story Generation from Answers Error: {ex.Message}");
+            
+            return $"🎭 **قصة {username}**\n\nحدث خطأ أثناء إنشاء القصة التفصيلية، لكن مرحباً بك في عائلة BitMob! 🌟";
+        }
+    }
+
+    private async Task SaveStoryToFile(ulong userId, string story)
+    {
+        try
+        {
+            const string StoriesFile = "stories.json";
+            var stories = new Dictionary<ulong, string>();
+
+            if (File.Exists(StoriesFile))
+            {
+                var content = File.ReadAllText(StoriesFile);
+                if (!string.IsNullOrEmpty(content))
+                {
+                    stories = JsonConvert.DeserializeObject<Dictionary<ulong, string>>(content) ?? new Dictionary<ulong, string>();
+                }
+            }
+
+            stories[userId] = story;
+            File.WriteAllText(StoriesFile, JsonConvert.SerializeObject(stories, Formatting.Indented));
+            
+            Console.WriteLine($"[SaveStory] Story saved for user {userId}");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[SaveStoryToFile Error] {ex.Message}");
+            Console.WriteLine($"[Error] Story Save Error: {ex.Message}");
         }
     }
 
