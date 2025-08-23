@@ -1272,6 +1272,29 @@ public class StoryCommands : InteractionModuleBase<SocketInteractionContext>
     {
         try
         {
+            // أولاً: التحقق من ملف stories.json
+            if (File.Exists("stories.json"))
+            {
+                var storiesJson = await File.ReadAllTextAsync("stories.json");
+                if (!string.IsNullOrEmpty(storiesJson))
+                {
+                    try
+                    {
+                        var stories = JObject.Parse(storiesJson);
+                        if (stories.ContainsKey(userId.ToString()))
+                        {
+                            Console.WriteLine($"[CheckStory] User {userId} has story in stories.json");
+                            return true;
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"[CheckStory] Error parsing stories.json: {ex.Message}");
+                    }
+                }
+            }
+
+            // ثانياً: التحقق من قناة Discord (كـ backup)
             var familyStoriesChannelIdStr = Environment.GetEnvironmentVariable("FAMILY_STORIES_CHANNEL_ID");
             if (!ulong.TryParse(familyStoriesChannelIdStr, out ulong familyStoriesChannelId) || familyStoriesChannelId == 0)
             {
@@ -1289,6 +1312,7 @@ public class StoryCommands : InteractionModuleBase<SocketInteractionContext>
                 // التحقق من وجود منشن للعضو
                 if (message.MentionedUserIds.Contains(userId))
                 {
+                    Console.WriteLine($"[CheckStory] User {userId} has story in Discord channel (mention)");
                     return true;
                 }
                 
@@ -1299,12 +1323,14 @@ public class StoryCommands : InteractionModuleBase<SocketInteractionContext>
                     {
                         if (embed.Description?.Contains($"<@{userId}>") == true)
                         {
+                            Console.WriteLine($"[CheckStory] User {userId} has story in Discord channel (embed)");
                             return true;
                         }
                     }
                 }
             }
             
+            Console.WriteLine($"[CheckStory] User {userId} has NO story found");
             return false;
         }
         catch (Exception ex)
