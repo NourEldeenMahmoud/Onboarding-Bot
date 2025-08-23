@@ -997,19 +997,8 @@ public class StoryCommands : InteractionModuleBase<SocketInteractionContext>
                     }
                 }
                 
-                // الرد على المستخدم بناءً على حالة defer
-                if (deferSuccess)
-                {
-                    await FollowupAsync("✅ **تم ترقيتك تلقائياً إلى رول Associate!**\n\n" +
-                                       "🎭 تم إرسال رسالة الترحيب في قناة القصص\n" +
-                                       "🔒 تم إخفاء قناة الأسئلة عنك");
-                }
-                else
-                {
-                    await RespondAsync("✅ **تم ترقيتك تلقائياً إلى رول Associate!**\n\n" +
-                                      "🎭 تم إرسال رسالة الترحيب في قناة القصص\n" +
-                                      "🔒 تم إخفاء قناة الأسئلة عنك");
-                }
+                // إرسال رسالة الترحيب في قناة القصص فقط (بدون الرد على المستخدم)
+                Console.WriteLine($"[Success] User {user.Username} already has story - promoted to Associate automatically");
                 return;
             }
 
