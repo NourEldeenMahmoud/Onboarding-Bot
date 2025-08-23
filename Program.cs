@@ -276,8 +276,8 @@ class Program
             SaveInviteHistory(user.Id, inviterName, inviterId, usedInvite?.Code ?? "Unknown", DateTime.Now);
 
             // التحقق من وجود قصة مسبقة للمستخدم
-            string existingStory = LoadStory(user.Id);
-            if (!string.IsNullOrEmpty(existingStory))
+            bool userHasStory = await CheckUserInStoryChannel(user.Id);
+            if (userHasStory)
             {
                 Console.WriteLine($"[Info] User {user.Username} already has a story, skipping onboarding");
                 
@@ -432,8 +432,9 @@ class Program
 
             string story = await GenerateStory(name, age, interest, specialty, strength, weakness, favoritePlace, inviterName, inviterRole, inviterStory, hasInviter);
 
+            // حفظ القصة في الملف للاستخدام المستقبلي
             SaveStory(user.Id, story);
-            Console.WriteLine("[Info] Story saved successfully.");
+            Console.WriteLine("[Info] Story generated and saved successfully.");
 
             if (storyChannelId != 0)
             {
@@ -757,7 +758,8 @@ class Program
                 .WithTimestamp(DateTimeOffset.Now)
                 .Build();
 
-            var allowedUsers = new List<ulong> { ownerId, user.Id };
+            // الحصول على قائمة المستخدمين المسموح لهم برؤية الرسالة
+            var allowedUsers = GetAllowedUsersForPrivateMessage(user);
             
             // إرسال الرسالة التوجيهية فقط
             await channel.SendMessageAsync(text: user.Mention, embed: infoEmbed, allowedMentions: new AllowedMentions { UserIds = allowedUsers });
@@ -791,26 +793,49 @@ class Program
         return "قصة العضو";
     }
 
+    private List<ulong> GetAllowedUsersForPrivateMessage(SocketGuildUser user)
+    {
+        var allowedUsers = new List<ulong> { user.Id };
+        
+        // إضافة Owner إذا كان مُعد
+        if (ownerId != 0)
+        {
+            allowedUsers.Add(ownerId);
+        }
+        
+        // إضافة الأدمن (أي شخص له صلاحية إدارة السيرفر)
+        var adminUsers = user.Guild.Users.Where(u => 
+            u.GuildPermissions.Administrator || 
+            u.GuildPermissions.ManageGuild ||
+            u.GuildPermissions.ManageChannels
+        ).Select(u => u.Id).ToList();
+        
+        allowedUsers.AddRange(adminUsers);
+        return allowedUsers.Distinct().ToList(); // إزالة التكرار
+    }
+
     private async Task SendMessageToJoinChannel(ITextChannel channel, SocketGuildUser user, string message)
     {
         try
         {
-            // إرسال الرسالة مع تحديد الأذونات (فقط Owner والشخص المذكور)
-            var allowedUsers = new List<ulong> { ownerId, user.Id };
-            if (ownerId == 0)
-            {
-                Console.WriteLine("[Warning] Owner ID not configured, message permissions may not work properly");
-            }
+            // الحصول على قائمة المستخدمين المسموح لهم برؤية الرسالة
+            var allowedUsers = GetAllowedUsersForPrivateMessage(user);
             
             var embed = new EmbedBuilder()
                 .WithColor(0x2f3136) // لون رمادي داكن
                 .WithDescription(message)
-                .WithFooter($"🔒 هذه الرسالة مرئية فقط للـ Owner و{user.Username}")
+                .WithFooter($"🔒 هذه الرسالة مرئية فقط لـ {user.Username} والأدمن")
                 .WithTimestamp(DateTimeOffset.Now)
                 .Build();
 
-            await channel.SendMessageAsync(embed: embed);
-            Console.WriteLine($"[Info] Message sent to join channel for {user.Username}: {message.Substring(0, Math.Min(50, message.Length))}...");
+            // إرسال الرسالة مع تحديد الأذونات
+            await channel.SendMessageAsync(
+                text: user.Mention, 
+                embed: embed, 
+                allowedMentions: new AllowedMentions { UserIds = allowedUsers }
+            );
+            
+            Console.WriteLine($"[Info] Private message sent to join channel for {user.Username}: {message.Substring(0, Math.Min(50, message.Length))}...");
         }
         catch (Exception ex)
         {
@@ -964,14 +989,33 @@ Hidden Docks، Tech Lab، Abandoned Warehouse، والمزيد.
                 ? JsonConvert.DeserializeObject<Dictionary<ulong, string>>(File.ReadAllText(StoriesFile))
                 : new Dictionary<ulong, string>();
 
+            if (stories == null)
+                stories = new Dictionary<ulong, string>();
+
             stories[userId] = story;
             File.WriteAllText(StoriesFile, JsonConvert.SerializeObject(stories, Formatting.Indented));
+            Console.WriteLine($"[SaveStory] Story saved for user {userId}");
         }
         catch (Exception ex)
         {
-            Console.WriteLine("[SaveStory Error] " + ex);
-            // Note: LogError is async but we can't await it here since this is a sync method
-            Console.WriteLine("[SaveStory Error] Failed to log error to channel - method is synchronous");
+            Console.WriteLine($"[SaveStory Error] {ex.Message}");
+        }
+    }
+
+    private string LoadStory(ulong userId)
+    {
+        try
+        {
+            if (!File.Exists(StoriesFile)) return "";
+            var jsonContent = File.ReadAllText(StoriesFile);
+            if (string.IsNullOrEmpty(jsonContent)) return "";
+            var stories = JsonConvert.DeserializeObject<Dictionary<ulong, string>>(jsonContent) ?? new Dictionary<ulong, string>();
+            return stories.ContainsKey(userId) ? stories[userId] : "";
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[LoadStory Error] {ex.Message}");
+            return "";
         }
     }
 
@@ -1019,24 +1063,104 @@ Hidden Docks، Tech Lab، Abandoned Warehouse، والمزيد.
         }
     }
 
-    private string LoadStory(ulong userId)
+    private async Task<string> LoadStoryAsync(ulong userId)
     {
         try
         {
-            if (!File.Exists(StoriesFile)) return "";
-            var jsonContent = File.ReadAllText(StoriesFile);
-            if (string.IsNullOrEmpty(jsonContent)) return "";
-            var stories = JsonConvert.DeserializeObject<Dictionary<ulong, string>>(jsonContent) ?? new Dictionary<ulong, string>();
-            return stories.ContainsKey(userId) ? stories[userId] : "";
+            if (storyChannelId == 0) return "";
+            
+            var storyChannel = _client?.GetChannel(storyChannelId) as IMessageChannel;
+            if (storyChannel == null) return "";
+
+            Console.WriteLine($"[Story Load] Searching for story of user {userId} in story channel...");
+            
+            // البحث في آخر 100 رسالة في قناة القصص
+            var messages = await storyChannel.GetMessagesAsync(100).FlattenAsync();
+            
+            foreach (var message in messages)
+            {
+                // التحقق من وجود منشن للعضو في الرسالة
+                if (message.MentionedUserIds.Contains(userId))
+                {
+                    // البحث عن الـ Embed الذي يحتوي على القصة
+                    foreach (var embed in message.Embeds)
+                    {
+                        if (!string.IsNullOrEmpty(embed.Description))
+                        {
+                            Console.WriteLine($"[Story Load] Found story for user {userId}");
+                            return embed.Description;
+                        }
+                    }
+                }
+                
+                // التحقق من وجود منشن للعضو في الـ Embeds
+                foreach (var embed in message.Embeds)
+                {
+                    // البحث في محتوى الـ Embed عن منشن العضو
+                    if (!string.IsNullOrEmpty(embed.Description) && embed.Description.Contains($"<@{userId}>"))
+                    {
+                        Console.WriteLine($"[Story Load] Found story for user {userId} in embed description");
+                        return embed.Description;
+                    }
+                }
+            }
+            
+            Console.WriteLine($"[Story Load] No story found for user {userId}");
+            return "";
         }
         catch (Exception ex)
         {
-            Console.WriteLine("[LoadStory Error] " + ex);
-            // Note: LogError is async but we can't await it here since this is a sync method
-            Console.WriteLine("[LoadStory Error] Failed to log error to channel - method is synchronous");
+            Console.WriteLine($"[Story Load Error] {ex.Message}");
             return "";
         }
     }
+
+    private async Task<bool> CheckUserInStoryChannel(ulong userId)
+    {
+        try
+        {
+            if (storyChannelId == 0) return false;
+            
+            var storyChannel = _client?.GetChannel(storyChannelId) as IMessageChannel;
+            if (storyChannel == null) return false;
+
+            Console.WriteLine($"[Story Check] Checking if user {userId} has been mentioned in story channel...");
+            
+            // البحث في آخر 100 رسالة في قناة القصص
+            var messages = await storyChannel.GetMessagesAsync(100).FlattenAsync();
+            
+            foreach (var message in messages)
+            {
+                // التحقق من وجود منشن للعضو في الرسالة
+                if (message.MentionedUserIds.Contains(userId))
+                {
+                    Console.WriteLine($"[Story Check] Found mention for user {userId} in message {message.Id}");
+                    return true;
+                }
+                
+                // التحقق من وجود منشن للعضو في الـ Embeds
+                foreach (var embed in message.Embeds)
+                {
+                    // البحث في محتوى الـ Embed عن منشن العضو
+                    if (!string.IsNullOrEmpty(embed.Description) && embed.Description.Contains($"<@{userId}>"))
+                    {
+                        Console.WriteLine($"[Story Check] Found user {userId} in embed description");
+                        return true;
+                    }
+                }
+            }
+            
+            Console.WriteLine($"[Story Check] No mentions found for user {userId} in story channel");
+            return false;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[Story Check Error] {ex.Message}");
+            return false;
+        }
+    }
+
+
 
     private void LoadConfiguration()
     {
@@ -1133,11 +1257,12 @@ public class StoryCommands : InteractionModuleBase<SocketInteractionContext>
         {
             await DeferAsync();
 
-            var story = LoadUserStory(user.Id);
+            // البحث عن قصة العضو في قناة القصص
+            var story = await LoadStoryAsync(user.Id);
             
             if (string.IsNullOrEmpty(story))
             {
-                await FollowupAsync($"❌ لا توجد قصة محفوظة لـ {user.Mention}");
+                await FollowupAsync($"❌ لا توجد قصة لـ {user.Mention} في قناة القصص");
                 return;
             }
 
@@ -1155,6 +1280,63 @@ public class StoryCommands : InteractionModuleBase<SocketInteractionContext>
         {
             Console.WriteLine($"[Story Command Error] {ex}");
             await FollowupAsync("❌ حدث خطأ أثناء عرض القصة");
+        }
+    }
+
+    private async Task<string> LoadStoryAsync(ulong userId)
+    {
+        try
+        {
+            // الحصول على معرف قناة القصص من المتغيرات البيئية
+            var storyChannelIdStr = Environment.GetEnvironmentVariable("STORY_CHANNEL_ID");
+            if (!ulong.TryParse(storyChannelIdStr, out ulong storyChannelId) || storyChannelId == 0)
+            {
+                return "";
+            }
+            
+            var storyChannel = Context.Client.GetChannel(storyChannelId) as IMessageChannel;
+            if (storyChannel == null) return "";
+
+            Console.WriteLine($"[Story Load] Searching for story of user {userId} in story channel...");
+            
+            // البحث في آخر 100 رسالة في قناة القصص
+            var messages = await storyChannel.GetMessagesAsync(100).FlattenAsync();
+            
+            foreach (var message in messages)
+            {
+                // التحقق من وجود منشن للعضو في الرسالة
+                if (message.MentionedUserIds.Contains(userId))
+                {
+                    // البحث عن الـ Embed الذي يحتوي على القصة
+                    foreach (var embed in message.Embeds)
+                    {
+                        if (!string.IsNullOrEmpty(embed.Description))
+                        {
+                            Console.WriteLine($"[Story Load] Found story for user {userId}");
+                            return embed.Description;
+                        }
+                    }
+                }
+                
+                // التحقق من وجود منشن للعضو في الـ Embeds
+                foreach (var embed in message.Embeds)
+                {
+                    // البحث في محتوى الـ Embed عن منشن العضو
+                    if (!string.IsNullOrEmpty(embed.Description) && embed.Description.Contains($"<@{userId}>"))
+                    {
+                        Console.WriteLine($"[Story Load] Found story for user {userId} in embed description");
+                        return embed.Description;
+                    }
+                }
+            }
+            
+            Console.WriteLine($"[Story Load] No story found for user {userId}");
+            return "";
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[Story Load Error] {ex.Message}");
+            return "";
         }
     }
 
@@ -1235,24 +1417,7 @@ public class StoryCommands : InteractionModuleBase<SocketInteractionContext>
         }
     }
 
-    private string LoadUserStory(ulong userId)
-    {
-        try
-        {
-            const string StoriesFile = "stories.json";
-            if (!File.Exists(StoriesFile)) return "";
-            
-            var jsonContent = File.ReadAllText(StoriesFile);
-            if (string.IsNullOrEmpty(jsonContent)) return "";
-            var stories = JsonConvert.DeserializeObject<Dictionary<ulong, string>>(jsonContent) ?? new Dictionary<ulong, string>();
-            return stories.ContainsKey(userId) ? stories[userId] : "";
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"[Load Story Error] {ex}");
-            return "";
-        }
-    }
+
 
     private InviteInfo LoadInviteHistory(ulong userId)
     {
