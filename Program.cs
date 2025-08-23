@@ -23,8 +23,8 @@ class Program
     string _ChatGPTApiKey = "";
     
     // Configuration - Load from environment variables for security
-    private ulong storyChannelId;
-    private ulong joinFamilyChannelId; // قناة Join the Family للأسئلة
+    private ulong familyStoriesChannelId;
+    private ulong cityGatesChannelId; // قناة City Gates للأسئلة
     private ulong ownerId; // ID الـ Owner
     private ulong logChannelId;
     private ulong associateRoleId;
@@ -627,33 +627,33 @@ Hidden Docks، Tech Lab، Abandoned Warehouse، والمزيد.
         try
         {
             // Load channel and role IDs from environment variables
-            var storyChannelIdStr = Environment.GetEnvironmentVariable("STORY_CHANNEL_ID");
-            var joinFamilyChannelIdStr = Environment.GetEnvironmentVariable("JOIN_FAMILY_CHANNEL_ID");
+            var familyStoriesChannelIdStr = Environment.GetEnvironmentVariable("FAMILY_STORIES_CHANNEL_ID");
+            var cityGatesChannelIdStr = Environment.GetEnvironmentVariable("CITY_GATES_CHANNEL_ID");
             var ownerIdStr = Environment.GetEnvironmentVariable("OWNER_ID");
             var logChannelIdStr = Environment.GetEnvironmentVariable("LOG_CHANNEL_ID");
             var associateRoleIdStr = Environment.GetEnvironmentVariable("ASSOCIATE_ROLE_ID");
             var outsiderRoleIdStr = Environment.GetEnvironmentVariable("OUTSIDER_ROLE_ID");
 
-            if (ulong.TryParse(storyChannelIdStr, out ulong storyId))
+            if (ulong.TryParse(familyStoriesChannelIdStr, out ulong familyStoriesId))
             {
-                storyChannelId = storyId;
-                Console.WriteLine($"[Config] Story channel ID loaded: {storyChannelId}");
+                familyStoriesChannelId = familyStoriesId;
+                Console.WriteLine($"[Config] Family Stories channel ID loaded: {familyStoriesChannelId}");
             }
             else
             {
-                Console.WriteLine("[Config Warning] STORY_CHANNEL_ID not found or invalid. Stories won't be posted to channels.");
-                storyChannelId = 0;
+                Console.WriteLine("[Config Warning] FAMILY_STORIES_CHANNEL_ID not found or invalid. Stories won't be posted to channels.");
+                familyStoriesChannelId = 0;
             }
 
-            if (ulong.TryParse(joinFamilyChannelIdStr, out ulong joinFamilyId))
+            if (ulong.TryParse(cityGatesChannelIdStr, out ulong cityGatesId))
             {
-                joinFamilyChannelId = joinFamilyId;
-                Console.WriteLine($"[Config] Join Family channel ID loaded: {joinFamilyChannelId}");
+                cityGatesChannelId = cityGatesId;
+                Console.WriteLine($"[Config] City Gates channel ID loaded: {cityGatesChannelId}");
             }
             else
             {
-                Console.WriteLine("[Config Error] JOIN_FAMILY_CHANNEL_ID not found or invalid. Onboarding won't work without this!");
-                joinFamilyChannelId = 0;
+                Console.WriteLine("[Config Error] CITY_GATES_CHANNEL_ID not found or invalid. Onboarding won't work without this!");
+                cityGatesChannelId = 0;
             }
 
             if (ulong.TryParse(ownerIdStr, out ulong ownerIdValue))
@@ -748,19 +748,19 @@ public class StoryCommands : InteractionModuleBase<SocketInteractionContext>
         try
         {
             // الحصول على معرف قناة القصص من المتغيرات البيئية
-            var storyChannelIdStr = Environment.GetEnvironmentVariable("STORY_CHANNEL_ID");
-            if (!ulong.TryParse(storyChannelIdStr, out ulong storyChannelId) || storyChannelId == 0)
+            var familyStoriesChannelIdStr = Environment.GetEnvironmentVariable("FAMILY_STORIES_CHANNEL_ID");
+            if (!ulong.TryParse(familyStoriesChannelIdStr, out ulong familyStoriesChannelId) || familyStoriesChannelId == 0)
             {
                 return "";
             }
             
-            var storyChannel = Context.Client.GetChannel(storyChannelId) as IMessageChannel;
-            if (storyChannel == null) return "";
+            var familyStoriesChannel = Context.Client.GetChannel(familyStoriesChannelId) as IMessageChannel;
+            if (familyStoriesChannel == null) return "";
 
             Console.WriteLine($"[Story Load] Searching for story of user {userId} in story channel...");
             
             // البحث في آخر 100 رسالة في قناة القصص
-            var messages = await storyChannel.GetMessagesAsync(100).FlattenAsync();
+            var messages = await familyStoriesChannel.GetMessagesAsync(100).FlattenAsync();
             
             foreach (var message in messages)
             {
@@ -905,7 +905,7 @@ public class StoryCommands : InteractionModuleBase<SocketInteractionContext>
         }
     }
 
-    [SlashCommand("start", "بدء عملية الانضمام للعائلة")]
+    [SlashCommand("join", "بدء عملية الانضمام للعائلة")]
     public async Task StartOnboarding()
     {
         try
@@ -920,13 +920,13 @@ public class StoryCommands : InteractionModuleBase<SocketInteractionContext>
             }
 
             // التحقق من أن الأمر مستخدم في قناة الأسئلة
-            var joinChannelIdStr = Environment.GetEnvironmentVariable("JOIN_FAMILY_CHANNEL_ID");
-            if (ulong.TryParse(joinChannelIdStr, out ulong requiredChannelId))
+            var cityGatesChannelIdStr = Environment.GetEnvironmentVariable("CITY_GATES_CHANNEL_ID");
+            if (ulong.TryParse(cityGatesChannelIdStr, out ulong requiredChannelId))
             {
                 if (Context.Channel.Id != requiredChannelId)
                 {
-                    var joinChannel = Context.Guild.GetTextChannel(requiredChannelId);
-                    var channelMention = joinChannel != null ? joinChannel.Mention : "#join-family";
+                    var cityGatesChannel = Context.Guild.GetTextChannel(requiredChannelId);
+                    var channelMention = cityGatesChannel != null ? cityGatesChannel.Mention : "#city-gates";
                     
                     await FollowupAsync($"❌ **هذا الأمر يعمل فقط في {channelMention}**\n\n" +
                                       "🔍 اذهب إلى قناة الأسئلة واستخدم الأمر هناك.");
@@ -949,16 +949,16 @@ public class StoryCommands : InteractionModuleBase<SocketInteractionContext>
                     .WithTimestamp(DateTimeOffset.Now)
                     .Build();
 
-                // إرسال الرسالة في قناة القصص
-                var storyChannelIdStr = Environment.GetEnvironmentVariable("STORY_CHANNEL_ID");
-                if (ulong.TryParse(storyChannelIdStr, out ulong storyChannelId) && storyChannelId != 0)
+                            // إرسال الرسالة في قناة القصص
+            var familyStoriesChannelIdStr = Environment.GetEnvironmentVariable("FAMILY_STORIES_CHANNEL_ID");
+            if (ulong.TryParse(familyStoriesChannelIdStr, out ulong familyStoriesChannelId) && familyStoriesChannelId != 0)
+            {
+                var familyStoriesChannel = Context.Guild.GetTextChannel(familyStoriesChannelId);
+                if (familyStoriesChannel != null)
                 {
-                    var storyChannel = Context.Guild.GetTextChannel(storyChannelId);
-                    if (storyChannel != null)
-                    {
-                        await storyChannel.SendMessageAsync(text: user.Mention, embed: embed);
-                    }
+                    await familyStoriesChannel.SendMessageAsync(text: user.Mention, embed: embed);
                 }
+            }
                 
                 await FollowupAsync("✅ تم إرسال رسالة الترحيب في قناة القصص");
                 return;
@@ -970,38 +970,38 @@ public class StoryCommands : InteractionModuleBase<SocketInteractionContext>
                               "⚠️ **مهم:** عليك الانتظار في قناة الأسئلة لبدء المقابلة.");
             
             // استخدام نفس المتغير المعرف سابقاً
-            if (ulong.TryParse(joinChannelIdStr, out ulong joinChannelId) && joinChannelId != 0)
+            if (ulong.TryParse(cityGatesChannelIdStr, out ulong cityGatesChannelId) && cityGatesChannelId != 0)
             {
-                var joinChannel = Context.Guild.GetTextChannel(joinChannelId);
-                if (joinChannel != null)
+                var cityGatesChannel = Context.Guild.GetTextChannel(cityGatesChannelId);
+                if (cityGatesChannel != null)
                 {
                     // إعطاء صلاحيات للعضو
-                    await GiveUserChannelPermission(joinChannel, user);
+                    await GiveUserChannelPermission(cityGatesChannel, user);
                     
-                    // إرسال رسالة بدء للعضو في قناة الأسئلة
-                    var welcomeEmbed = new EmbedBuilder()
-                        .WithColor(0x2f3136)
-                        .WithTitle("🎭 أهلاً وسهلاً بك!")
-                        .WithDescription($"مرحباً بك {user.Mention} في عائلة BitMob!\n\n" +
-                                       "سأطرح عليك بعض الأسئلة لكتابة قصتك.\n" +
-                                       "**اكتب إجاباتك في هذه القناة.**")
-                        .WithFooter("🔒 هذه المحادثة مرئية فقط لك وللإدارة")
-                        .WithTimestamp(DateTimeOffset.Now)
+                                    // إرسال رسالة بدء للعضو في قناة الأسئلة
+                var welcomeEmbed = new EmbedBuilder()
+                    .WithColor(0x2f3136)
+                    .WithTitle("🎭 أهلاً وسهلاً بك!")
+                    .WithDescription($"مرحباً بك {user.Mention} في عائلة BitMob!\n\n" +
+                                   "سأطرح عليك بعض الأسئلة لكتابة قصتك.\n" +
+                                   "**اكتب إجاباتك في هذه القناة.**")
+                    .WithFooter("🔒 هذه المحادثة مرئية فقط لك وللإدارة")
+                    .WithTimestamp(DateTimeOffset.Now)
+                    .Build();
+                
+                await cityGatesChannel.SendMessageAsync(text: user.Mention, embed: welcomeEmbed);
+                
+                // بدء الأسئلة بعد تأخير قصير
+                _ = Task.Delay(3000).ContinueWith(async _ => {
+                    var firstQuestionEmbed = new EmbedBuilder()
+                        .WithColor(0x5865f2)
+                        .WithTitle("❓ السؤال الأول")
+                        .WithDescription("ما اسمك الحقيقي؟")
+                        .WithFooter("انتظر إجابتك...")
                         .Build();
                     
-                    await joinChannel.SendMessageAsync(text: user.Mention, embed: welcomeEmbed);
-                    
-                    // بدء الأسئلة بعد تأخير قصير
-                    _ = Task.Delay(3000).ContinueWith(async _ => {
-                        var firstQuestionEmbed = new EmbedBuilder()
-                            .WithColor(0x5865f2)
-                            .WithTitle("❓ السؤال الأول")
-                            .WithDescription("ما اسمك الحقيقي؟")
-                            .WithFooter("انتظر إجابتك...")
-                            .Build();
-                        
-                        await joinChannel.SendMessageAsync(text: user.Mention, embed: firstQuestionEmbed);
-                    });
+                    await cityGatesChannel.SendMessageAsync(text: user.Mention, embed: firstQuestionEmbed);
+                });
                 }
             }
         }
@@ -1016,17 +1016,17 @@ public class StoryCommands : InteractionModuleBase<SocketInteractionContext>
     {
         try
         {
-            var storyChannelIdStr = Environment.GetEnvironmentVariable("STORY_CHANNEL_ID");
-            if (!ulong.TryParse(storyChannelIdStr, out ulong storyChannelId) || storyChannelId == 0)
+            var familyStoriesChannelIdStr = Environment.GetEnvironmentVariable("FAMILY_STORIES_CHANNEL_ID");
+            if (!ulong.TryParse(familyStoriesChannelIdStr, out ulong familyStoriesChannelId) || familyStoriesChannelId == 0)
             {
                 return false;
             }
             
-            var storyChannel = Context.Client.GetChannel(storyChannelId) as IMessageChannel;
-            if (storyChannel == null) return false;
+            var familyStoriesChannel = Context.Client.GetChannel(familyStoriesChannelId) as IMessageChannel;
+            if (familyStoriesChannel == null) return false;
 
             // البحث في آخر 200 رسالة
-            var messages = await storyChannel.GetMessagesAsync(200).FlattenAsync();
+            var messages = await familyStoriesChannel.GetMessagesAsync(200).FlattenAsync();
             
             foreach (var message in messages)
             {
@@ -1062,18 +1062,59 @@ public class StoryCommands : InteractionModuleBase<SocketInteractionContext>
     {
         try
         {
+            // إعطاء صلاحيات كاملة للعضو
             var permissionOverwrite = new OverwritePermissions(
                 viewChannel: PermValue.Allow,
                 sendMessages: PermValue.Allow,
-                readMessageHistory: PermValue.Allow
+                readMessageHistory: PermValue.Allow,
+                addReactions: PermValue.Allow,
+                embedLinks: PermValue.Allow,
+                attachFiles: PermValue.Allow,
+                useExternalEmojis: PermValue.Allow
             );
             
             await channel.AddPermissionOverwriteAsync(user, permissionOverwrite);
-            Console.WriteLine($"[Permission] Gave channel permission to {user.Username}");
+            Console.WriteLine($"[Permission] Gave full channel permission to {user.Username}");
+            
+            // إعطاء صلاحيات للتفاعل مع الأعضاء الآخرين
+            await EnableUserInteraction(channel, user);
         }
         catch (Exception ex)
         {
             Console.WriteLine($"[Permission Error] {ex.Message}");
+        }
+    }
+
+    private async Task EnableUserInteraction(ITextChannel channel, SocketGuildUser user)
+    {
+        try
+        {
+            // البحث عن الأعضاء الآخرين في نفس المرحلة
+            var otherOutsiders = channel.Guild.Users
+                .Where(u => u.Roles.Any(r => r.Id == ulong.Parse(Environment.GetEnvironmentVariable("OUTSIDER_ROLE_ID") ?? "0")))
+                .Where(u => u.Id != user.Id)
+                .ToList();
+
+            foreach (var otherUser in otherOutsiders)
+            {
+                // إعطاء صلاحيات للتفاعل مع الأعضاء الآخرين
+                var interactionPermissions = new OverwritePermissions(
+                    viewChannel: PermValue.Allow,
+                    sendMessages: PermValue.Allow,
+                    readMessageHistory: PermValue.Allow,
+                    addReactions: PermValue.Allow,
+                    embedLinks: PermValue.Allow,
+                    attachFiles: PermValue.Allow,
+                    useExternalEmojis: PermValue.Allow
+                );
+                
+                await channel.AddPermissionOverwriteAsync(otherUser, interactionPermissions);
+                Console.WriteLine($"[Interaction] Enabled interaction between {user.Username} and {otherUser.Username}");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[Interaction Error] {ex.Message}");
         }
     }
 
@@ -1105,13 +1146,13 @@ public class StoryCommands : InteractionModuleBase<SocketInteractionContext>
             }
             
             // تحديث صلاحيات القناة
-            var joinChannelIdStr = Environment.GetEnvironmentVariable("JOIN_FAMILY_CHANNEL_ID");
-            if (ulong.TryParse(joinChannelIdStr, out ulong joinChannelId) && joinChannelId != 0)
+            var cityGatesChannelIdStr = Environment.GetEnvironmentVariable("CITY_GATES_CHANNEL_ID");
+            if (ulong.TryParse(cityGatesChannelIdStr, out ulong cityGatesChannelId) && cityGatesChannelId != 0)
             {
-                var joinChannel = user.Guild.GetTextChannel(joinChannelId);
-                if (joinChannel != null)
+                var cityGatesChannel = user.Guild.GetTextChannel(cityGatesChannelId);
+                if (cityGatesChannel != null)
                 {
-                    await SetChannelVisibilityForUser(joinChannel, user, false); // false = ليس outsider
+                    await SetChannelVisibilityForUser(cityGatesChannel, user, false); // false = ليس outsider
                 }
             }
         }
@@ -1127,14 +1168,21 @@ public class StoryCommands : InteractionModuleBase<SocketInteractionContext>
         {
             if (isOutsider)
             {
-                // العضو outsider - إعطاء صلاحيات الوصول لقناة الأسئلة
+                // العضو outsider - إعطاء صلاحيات كاملة للتفاعل
                 var allowPermissions = new OverwritePermissions(
                     viewChannel: PermValue.Allow,
                     sendMessages: PermValue.Allow,
-                    readMessageHistory: PermValue.Allow
+                    readMessageHistory: PermValue.Allow,
+                    addReactions: PermValue.Allow,
+                    embedLinks: PermValue.Allow,
+                    attachFiles: PermValue.Allow,
+                    useExternalEmojis: PermValue.Allow
                 );
                 await channel.AddPermissionOverwriteAsync(user, allowPermissions);
-                Console.WriteLine($"[Permission] Granted channel access to outsider: {user.Username}");
+                Console.WriteLine($"[Permission] Granted full channel access to outsider: {user.Username}");
+                
+                // تمكين التفاعل مع الأعضاء الآخرين
+                await EnableUserInteraction(channel, user);
             }
             else
             {
@@ -1142,7 +1190,11 @@ public class StoryCommands : InteractionModuleBase<SocketInteractionContext>
                 var hidePermissions = new OverwritePermissions(
                     viewChannel: PermValue.Deny,
                     sendMessages: PermValue.Deny,
-                    readMessageHistory: PermValue.Deny
+                    readMessageHistory: PermValue.Deny,
+                    addReactions: PermValue.Deny,
+                    embedLinks: PermValue.Deny,
+                    attachFiles: PermValue.Deny,
+                    useExternalEmojis: PermValue.Deny
                 );
                 await channel.AddPermissionOverwriteAsync(user, hidePermissions);
                 Console.WriteLine($"[Permission] Hidden channel from associate: {user.Username}");
@@ -1181,15 +1233,15 @@ public class StoryCommands : InteractionModuleBase<SocketInteractionContext>
                 return;
             }
 
-            var joinChannelIdStr = Environment.GetEnvironmentVariable("JOIN_FAMILY_CHANNEL_ID");
-            if (!ulong.TryParse(joinChannelIdStr, out ulong joinChannelId) || joinChannelId == 0)
+            var cityGatesChannelIdStr = Environment.GetEnvironmentVariable("CITY_GATES_CHANNEL_ID");
+            if (!ulong.TryParse(cityGatesChannelIdStr, out ulong cityGatesChannelId) || cityGatesChannelId == 0)
             {
                 await FollowupAsync("❌ قناة الأسئلة غير معرفة في الإعدادات");
                 return;
             }
 
-            var joinChannel = Context.Guild.GetTextChannel(joinChannelId);
-            if (joinChannel == null)
+            var cityGatesChannel = Context.Guild.GetTextChannel(cityGatesChannelId);
+            if (cityGatesChannel == null)
             {
                 await FollowupAsync("❌ قناة الأسئلة غير موجودة");
                 return;
@@ -1220,7 +1272,7 @@ public class StoryCommands : InteractionModuleBase<SocketInteractionContext>
                 }
                 
                 // تحديث الصلاحيات بناءً على الرول
-                await SetChannelVisibilityForUser(joinChannel, guildUser, isOutsider);
+                await SetChannelVisibilityForUser(cityGatesChannel, guildUser, isOutsider);
             }
 
             var summaryEmbed = new EmbedBuilder()
