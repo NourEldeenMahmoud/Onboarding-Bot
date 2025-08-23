@@ -178,9 +178,6 @@ class Program
         await _client.LoginAsync(TokenType.Bot, _token);
         await _client.StartAsync();
 
-        // Register slash commands
-        await RegisterCommandsAsync();
-
         Console.WriteLine("[Bot] Bot started successfully and running in background");
         
         // الحفاظ على البوت يعمل
@@ -246,13 +243,15 @@ class Program
         }
     }
 
-    private Task ReadyAsync()
+    private async Task ReadyAsync()
     {
         if (_client?.CurrentUser != null)
         {
             Console.WriteLine($"[Ready] {_client.CurrentUser} is connected!");
         }
-        return Task.CompletedTask;
+
+        // تسجيل الأوامر بعد الاتصال
+        await RegisterCommandsAsync();
     }
 
 
