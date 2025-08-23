@@ -1149,11 +1149,15 @@ public class StoryCommands : InteractionModuleBase<SocketInteractionContext>
     [SlashCommand("join", "بدء عملية الانضمام للعائلة")]
     public async Task StartOnboarding()
     {
+        // محاولة defer مع معالجة الأخطاء
+        bool deferSuccess = false;
+        
         try
         {
             try
             {
                 await DeferAsync();
+                deferSuccess = true;
             }
             catch (Discord.Net.HttpException ex) when (ex.DiscordCode?.ToString() == "10062")
             {
@@ -1163,14 +1167,20 @@ public class StoryCommands : InteractionModuleBase<SocketInteractionContext>
             catch (Exception ex)
             {
                 Console.WriteLine($"[Error] Failed to defer interaction: {ex.Message}");
-                await FollowupAsync("❌ حدث خطأ في التفاعل. حاول مرة أخرى.");
-                return;
+                // لا نوقف العملية، نكمل بدون defer
             }
 
             var user = Context.User as SocketGuildUser;
             if (user == null)
             {
-                await FollowupAsync("❌ حدث خطأ في تحديد العضو");
+                if (deferSuccess)
+                {
+                    await FollowupAsync("❌ حدث خطأ في تحديد العضو");
+                }
+                else
+                {
+                    await RespondAsync("❌ حدث خطأ في تحديد العضو");
+                }
                 return;
             }
 
@@ -1183,8 +1193,16 @@ public class StoryCommands : InteractionModuleBase<SocketInteractionContext>
                     var cityGatesChannel = Context.Guild.GetTextChannel(requiredChannelId);
                     var channelMention = cityGatesChannel != null ? cityGatesChannel.Mention : "#city-gates";
                     
-                    await FollowupAsync($"❌ **هذا الأمر يعمل فقط في {channelMention}**\n\n" +
-                                      "🔍 اذهب إلى قناة الأسئلة واستخدم الأمر هناك.");
+                    if (deferSuccess)
+                    {
+                        await FollowupAsync($"❌ **هذا الأمر يعمل فقط في {channelMention}**\n\n" +
+                                          "🔍 اذهب إلى قناة الأسئلة واستخدم الأمر هناك.");
+                    }
+                    else
+                    {
+                        await RespondAsync($"❌ **هذا الأمر يعمل فقط في {channelMention}**\n\n" +
+                                          "🔍 اذهب إلى قناة الأسئلة واستخدم الأمر هناك.");
+                    }
                     return;
                 }
             }
@@ -1219,16 +1237,35 @@ public class StoryCommands : InteractionModuleBase<SocketInteractionContext>
                     }
                 }
                 
-                await FollowupAsync("✅ **تم ترقيتك تلقائياً إلى رول Associate!**\n\n" +
-                                   "🎭 تم إرسال رسالة الترحيب في قناة القصص\n" +
-                                   "🔒 تم إخفاء قناة الأسئلة عنك");
+                // الرد على المستخدم بناءً على حالة defer
+                if (deferSuccess)
+                {
+                    await FollowupAsync("✅ **تم ترقيتك تلقائياً إلى رول Associate!**\n\n" +
+                                       "🎭 تم إرسال رسالة الترحيب في قناة القصص\n" +
+                                       "🔒 تم إخفاء قناة الأسئلة عنك");
+                }
+                else
+                {
+                    await RespondAsync("✅ **تم ترقيتك تلقائياً إلى رول Associate!**\n\n" +
+                                      "🎭 تم إرسال رسالة الترحيب في قناة القصص\n" +
+                                      "🔒 تم إخفاء قناة الأسئلة عنك");
+                }
                 return;
             }
 
             // العضو جديد - بدء الـ onboarding
-            await FollowupAsync("🎭 **مرحباً بك في عائلة BitMob!**\n\n" +
-                              "سيتم بدء عملية الانضمام الآن...\n" +
-                              "⚠️ **مهم:** عليك الانتظار في قناة الأسئلة لبدء المقابلة.");
+            if (deferSuccess)
+            {
+                await FollowupAsync("🎭 **مرحباً بك في عائلة BitMob!**\n\n" +
+                                  "سيتم بدء عملية الانضمام الآن...\n" +
+                                  "⚠️ **مهم:** عليك الانتظار في قناة الأسئلة لبدء المقابلة.");
+            }
+            else
+            {
+                await RespondAsync("🎭 **مرحباً بك في عائلة BitMob!**\n\n" +
+                                  "سيتم بدء عملية الانضمام الآن...\n" +
+                                  "⚠️ **مهم:** عليك الانتظار في قناة الأسئلة لبدء المقابلة.");
+            }
             
             // استخدام نفس المتغير المعرف سابقاً
             if (ulong.TryParse(cityGatesChannelIdStr, out ulong cityGatesChannelId) && cityGatesChannelId != 0)
@@ -1264,7 +1301,21 @@ public class StoryCommands : InteractionModuleBase<SocketInteractionContext>
             Console.WriteLine($"[Start Command Error] {ex}");
             Console.WriteLine($"[Error] Join Command Error: {ex.Message}");
             
-            await FollowupAsync("❌ حدث خطأ أثناء بدء عملية الانضمام");
+            try
+            {
+                if (deferSuccess)
+                {
+                    await FollowupAsync("❌ حدث خطأ أثناء بدء عملية الانضمام");
+                }
+                else
+                {
+                    await RespondAsync("❌ حدث خطأ أثناء بدء عملية الانضمام");
+                }
+            }
+            catch (Exception responseEx)
+            {
+                Console.WriteLine($"[Response Error] {responseEx.Message}");
+            }
         }
     }
     
