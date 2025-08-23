@@ -919,7 +919,7 @@ public class StoryCommands : InteractionModuleBase<SocketInteractionContext>
             {
                 await DeferAsync();
             }
-            catch (Discord.Net.HttpException ex) when (ex.DiscordCode == 10062)
+            catch (Discord.Net.HttpException ex) when (ex.DiscordCode?.ToString() == "10062")
             {
                 // تجاهل خطأ Unknown interaction - شائع في Render.com
                 Console.WriteLine($"[Warning] Unknown interaction error for user {Context.User.Username} - continuing anyway");
