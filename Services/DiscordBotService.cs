@@ -579,6 +579,9 @@ namespace Onboarding_bot.Services
         {
             try
             {
+                // IMPORTANT: First, ensure role consistency for this user
+                await EnsureRoleConsistencyAsync(user);
+                
                 // Check if user is in City Gates channel
                 var cityGatesChannelIdStr = Environment.GetEnvironmentVariable("DISCORD_CITY_GATES_CHANNEL_ID");
                 var DISCORD_STORY_CHANNEL_ID = Environment.GetEnvironmentVariable("DISCORD_STORY_CHANNEL_ID");
@@ -603,6 +606,9 @@ namespace Onboarding_bot.Services
                     
                     if (associateRole != null && user.Roles.Contains(associateRole))
                     {
+                        // IMPORTANT: Remove Outsider role if user has Associate role
+                        await UpdateUserRolesAsync(user, removeOutsider: true, addAssociate: false);
+                        
                         await channel.SendMessageAsync("أنت بالفعل عضو في العائلة!");
                         return;
                     }

@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("Onboardingbot")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+1ae69272535684734b20855997ba43fef13e55fe")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+2971ffd2c62f2416ea2c18a153983c9f648cf809")]
 [assembly: System.Reflection.AssemblyProductAttribute("Onboardingbot")]
 [assembly: System.Reflection.AssemblyTitleAttribute("Onboardingbot")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
