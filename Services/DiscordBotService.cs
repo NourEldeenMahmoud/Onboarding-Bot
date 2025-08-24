@@ -212,27 +212,37 @@ namespace Onboarding_bot.Services
                     return false;
                 }
 
-                // Get recent messages and check for user mentions
-                var messages = await storyChannel.GetMessagesAsync(100).FlattenAsync();
+                // Get recent messages (last 200 messages to be sure)
+                var messages = await storyChannel.GetMessagesAsync(200).FlattenAsync();
+                _logger.LogInformation("[CheckStory] Checking {MessageCount} messages in story channel for user {Username}", messages.Count(), user.Username);
                 
                 foreach (var message in messages)
                 {
                     // Check if user is mentioned in the message
                     if (message.MentionedUserIds.Contains(user.Id))
                     {
-                        _logger.LogInformation("[CheckStory] Found existing story for user {Username} in message {MessageId}", user.Username, message.Id);
+                        _logger.LogInformation("[CheckStory] Found existing story for user {Username} by mention in message {MessageId} (Content: {Content})", 
+                            user.Username, message.Id, message.Content?.Substring(0, Math.Min(50, message.Content?.Length ?? 0)));
                         return true;
                     }
                     
-                    // Also check if the message content contains the user's name or username
-                    if (message.Content.Contains(user.Username) || message.Content.Contains(user.Nickname ?? ""))
+                    // Check if the message content contains the user's name or username
+                    if (!string.IsNullOrEmpty(message.Content))
                     {
-                        _logger.LogInformation("[CheckStory] Found existing story for user {Username} by name match in message {MessageId}", user.Username, message.Id);
-                        return true;
+                        var content = message.Content.ToLowerInvariant();
+                        var username = user.Username.ToLowerInvariant();
+                        var nickname = (user.Nickname ?? "").ToLowerInvariant();
+                        
+                        if (content.Contains(username) || (!string.IsNullOrEmpty(nickname) && content.Contains(nickname)))
+                        {
+                            _logger.LogInformation("[CheckStory] Found existing story for user {Username} by name match in message {MessageId} (Content: {Content})", 
+                                user.Username, message.Id, message.Content.Substring(0, Math.Min(50, message.Content.Length)));
+                            return true;
+                        }
                     }
                 }
                 
-                _logger.LogInformation("[CheckStory] No existing story found for user {Username} in story channel", user.Username);
+                _logger.LogInformation("[CheckStory] No existing story found for user {Username} in story channel. User is considered NEW.", user.Username);
                 return false;
             }
             catch (Exception ex)
@@ -242,26 +252,58 @@ namespace Onboarding_bot.Services
             }
         }
 
-        private async Task HandleExistingUserAsync(SocketGuildUser user)
+        private async Task HandleExistingUserAsync(SocketGuildUser user, ISocketMessageChannel channel = null)
         {
             try
             {
                 // Remove Outsider role and add Associate role
                 await UpdateUserRolesAsync(user, removeOutsider: true, addAssociate: true);
 
-                // Send welcome back message
-                var embed = new EmbedBuilder()
-                    .WithTitle("🎭 مرحباً بعودتك!")
-                    .WithDescription("انته قديم… كنت موجود قبل كده. تم تحديث وضعك.")
-                    .WithColor(Color.Green)
-                    .WithTimestamp(DateTimeOffset.UtcNow)
-                    .Build();
+                // Send message in City Gates channel if channel is provided
+                if (channel != null)
+                {
+                    var embed = new EmbedBuilder()
+                        .WithTitle("🎭 محاولة انضمام فاشلة!")
+                        .WithDescription($"**{user.Username}**، انت بتحاول تعمل onboarding...\n\n❌ **وانته قديم!** كنت موجود قبل كده. تم تحديث وضعك.")
+                        .WithColor(Color.Orange)
+                        .WithTimestamp(DateTimeOffset.UtcNow)
+                        .Build();
 
-                await user.SendMessageAsync(embed: embed);
+                    await channel.SendMessageAsync(embed: embed);
+                }
+
+                // Always send welcome back message to STORY CHANNEL
+                var storyChannelIdStr = Environment.GetEnvironmentVariable("DISCORD_STORY_CHANNEL_ID");
+                if (!string.IsNullOrEmpty(storyChannelIdStr) && ulong.TryParse(storyChannelIdStr, out var storyChannelId))
+                {
+                    var storyChannel = _client.GetChannel(storyChannelId) as IMessageChannel;
+                    if (storyChannel != null)
+                    {
+                        var storyEmbed = new EmbedBuilder()
+                            .WithTitle("🎭 عضو قديم عاد!")
+                            .WithDescription($"**{user.Username}** عضو قديم ورجع للعائلة! 🎉")
+                            .WithColor(Color.Green)
+                            .WithThumbnailUrl(user.GetAvatarUrl())
+                            .WithTimestamp(DateTimeOffset.UtcNow)
+                            .WithFooter(footer => footer.Text = "🟢 عضو قديم")
+                            .Build();
+
+                        await storyChannel.SendMessageAsync(embed: storyEmbed);
+                        _logger.LogInformation("[ExistingUser] Sent welcome back message to story channel for {Username}", user.Username);
+                    }
+                }
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "[Error] Failed to handle existing user");
+                if (channel != null)
+                {
+                    try
+                    {
+                        await channel.SendMessageAsync("حدث خطأ أثناء تحديث وضعك.");
+                    }
+                    catch { }
+                }
             }
         }
 
@@ -337,6 +379,8 @@ namespace Onboarding_bot.Services
             {
                 // Check if user is in City Gates channel
                 var cityGatesChannelIdStr = Environment.GetEnvironmentVariable("DISCORD_CITY_GATES_CHANNEL_ID");
+                var DISCORD_STORY_CHANNEL_ID = Environment.GetEnvironmentVariable("DISCORD_STORY_CHANNEL_ID");
+
                 if (string.IsNullOrEmpty(cityGatesChannelIdStr) || !ulong.TryParse(cityGatesChannelIdStr, out var cityGatesChannelId))
                 {
                     await channel.SendMessageAsync("خطأ في إعدادات البوت.");
@@ -379,29 +423,6 @@ namespace Onboarding_bot.Services
             {
                 _logger.LogError(ex, "[Error] Failed to handle join command");
                 await channel.SendMessageAsync("حدث خطأ أثناء تنفيذ الأمر.");
-            }
-        }
-
-        private async Task HandleExistingUserAsync(SocketGuildUser user, ISocketMessageChannel channel)
-        {
-            try
-            {
-                // Remove Outsider role and add Associate role
-                await UpdateUserRolesAsync(user, removeOutsider: true, addAssociate: true);
-
-                var embed = new EmbedBuilder()
-                    .WithTitle("🎭 مرحباً بعودتك!")
-                    .WithDescription("انته قديم… كنت موجود قبل كده. تم تحديث وضعك.")
-                    .WithColor(Color.Green)
-                    .WithTimestamp(DateTimeOffset.UtcNow)
-                    .Build();
-
-                await channel.SendMessageAsync(embed: embed);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "[Error] Failed to handle existing user");
-                await channel.SendMessageAsync("حدث خطأ أثناء تحديث وضعك.");
             }
         }
 
