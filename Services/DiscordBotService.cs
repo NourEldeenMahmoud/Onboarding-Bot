@@ -1,5 +1,6 @@
 using Discord;
 using Discord.WebSocket;
+using Discord.Rest;
 using Microsoft.Extensions.Logging;
 using Onboarding_bot.Handlers;
 
@@ -10,7 +11,8 @@ namespace Onboarding_bot.Services
         private readonly DiscordSocketClient _client;
         private readonly ILogger<DiscordBotService> _logger;
         private readonly OnboardingHandler _onboardingHandler;
-        private readonly Dictionary<string, int> _inviteUses = new();
+        // IMPROVED: Use cache per guild instead of single dictionary
+        private readonly Dictionary<ulong, List<RestInviteMetadata>> _inviteCache = new();
 
         public DiscordBotService(
             ILogger<DiscordBotService> logger,
@@ -26,6 +28,7 @@ namespace Onboarding_bot.Services
         {
             _client.Log += LogAsync;
             _client.Ready += ReadyAsync;
+            _client.GuildAvailable += GuildAvailableAsync; // Add this to track invites when guild becomes available
             _client.UserJoined += HandleUserJoinedAsync;
             _client.MessageReceived += HandleMessageReceivedAsync;
             _client.InteractionCreated += HandleInteractionCreatedAsync;
@@ -118,23 +121,54 @@ namespace Onboarding_bot.Services
             }
         }
 
-        private async Task DisconnectedAsync(Exception exception)
+        private Task DisconnectedAsync(Exception exception)
         {
             _logger.LogWarning(exception, "[Disconnected] Bot disconnected from Discord");
             
-            // Wait a bit before attempting to reconnect
-            await Task.Delay(5000);
+            // Don't block the gateway task - use Task.Run for reconnection
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    // Wait a bit before attempting to reconnect
+                    await Task.Delay(5000);
+                    
+                    _logger.LogInformation("[Reconnection] Attempting to reconnect to Discord...");
+                    
+                    // Try to reconnect multiple times
+                    int maxReconnectAttempts = 3;
+                    for (int attempt = 1; attempt <= maxReconnectAttempts; attempt++)
+                    {
+                        try
+                        {
+                            if (_client.ConnectionState == ConnectionState.Disconnected)
+                            {
+                                await _client.StartAsync();
+                                _logger.LogInformation("[Reconnection] Successfully reconnected to Discord on attempt {Attempt}", attempt);
+                                return;
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.LogWarning(ex, "[Reconnection] Failed to reconnect on attempt {Attempt}/{MaxAttempts}", attempt, maxReconnectAttempts);
+                            
+                            if (attempt < maxReconnectAttempts)
+                            {
+                                int delaySeconds = Math.Min(10 * attempt, 30); // Exponential backoff with max 30 seconds
+                                await Task.Delay(delaySeconds * 1000);
+                            }
+                        }
+                    }
+                    
+                    _logger.LogError("[Reconnection] Failed to reconnect after {MaxAttempts} attempts", maxReconnectAttempts);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "[Reconnection] Unexpected error during reconnection");
+                }
+            });
             
-            try
-            {
-                _logger.LogInformation("[Reconnection] Attempting to reconnect to Discord...");
-                await _client.StartAsync();
-                _logger.LogInformation("[Reconnection] Successfully reconnected to Discord");
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "[Reconnection] Failed to reconnect to Discord");
-            }
+            return Task.CompletedTask;
         }
 
         private Task LogAsync(LogMessage log)
@@ -143,53 +177,122 @@ namespace Onboarding_bot.Services
             return Task.CompletedTask;
         }
 
-        private async Task ReadyAsync()
+        private Task ReadyAsync()
         {
             _logger.LogInformation("[Ready] {BotName} is connected!", _client.CurrentUser?.Username);
+            
+            // GuildAvailable event will handle invite tracking for each guild
+            // No need to do it here to avoid duplicate work
+            
+            return Task.CompletedTask;
+        }
 
-            // Initialize invite tracking
-            foreach (var guild in _client.Guilds)
+        private Task GuildAvailableAsync(SocketGuild guild)
+        {
+            _logger.LogInformation("[GuildAvailable] Guild {GuildName} ({GuildId}) is now available. Tracking invites...", guild.Name, guild.Id);
+            _ = Task.Run(async () =>
             {
                 try
                 {
                     var invites = await guild.GetInvitesAsync();
-                    _logger.LogInformation("[Ready] Found {InviteCount} invites in guild {GuildName}", invites.Count, guild.Name);
+                    _logger.LogInformation("[GuildAvailable] Found {InviteCount} invites in guild {GuildName}", invites.Count, guild.Name);
                     
-                    foreach (var invite in invites)
-                    {
-                        _inviteUses[invite.Code] = invite.Uses ?? 0;
-                        _logger.LogInformation("[Ready] Tracked invite {Code} with {Uses} uses", invite.Code, invite.Uses ?? 0);
-                    }
+                    // Cache the invites for this guild
+                    _inviteCache[guild.Id] = invites.ToList();
+                    _logger.LogInformation("[GuildAvailable] Invite cache initialized for guild {GuildName}", guild.Name);
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogWarning(ex, "[Ready] Failed to get invites for guild {GuildName}", guild.Name);
+                    _logger.LogWarning(ex, "[GuildAvailable] Failed to get invites for guild {GuildName}", guild.Name);
                 }
-            }
+            });
+            return Task.CompletedTask;
         }
 
-        private async Task HandleUserJoinedAsync(SocketGuildUser user)
+        private Task HandleUserJoinedAsync(SocketGuildUser user)
         {
             try
             {
                 _logger.LogInformation("[UserJoined] {Username} joined.", user.Username);
 
-                // Check if user has existing story in story channel
-                var hasExistingStory = await CheckExistingStoryAsync(user);
-                if (hasExistingStory)
+                // Handle user joined in background to prevent blocking
+                _ = Task.Run(async () =>
                 {
-                    await HandleExistingUserAsync(user);
-                    return;
-                }
+                    try
+                    {
+                        // IMPROVED: Track invite usage immediately when user joins
+                        await TrackInviteUsageAsync(user);
+                        
+                        // Check if user has existing story in story channel
+                        var hasExistingStory = await CheckExistingStoryAsync(user);
+                        if (hasExistingStory)
+                        {
+                            await HandleExistingUserAsync(user);
+                            return;
+                        }
 
-                // For new users, just add Outsider role - DON'T start onboarding automatically
-                // Onboarding only starts when user types /join command
-                await UpdateUserRolesAsync(user, removeOutsider: false, addOutsider: true);
-                _logger.LogInformation("[UserJoined] Added Outsider role to new user {Username}. Waiting for /join command.", user.Username);
+                        // For new users, just add Outsider role - DON'T start onboarding automatically
+                        // Onboarding only starts when user types /join command
+                        await UpdateUserRolesAsync(user, removeOutsider: false, addOutsider: true);
+                        _logger.LogInformation("[UserJoined] Added Outsider role to new user {Username}. Waiting for /join command.", user.Username);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, "[Error] Exception in HandleUserJoinedAsync background task for {Username}", user.Username);
+                    }
+                });
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "[Error] Exception in HandleUserJoinedAsync");
+                _logger.LogError(ex, "[Error] Exception in HandleUserJoinedAsync for {Username}", user.Username);
+            }
+            
+            return Task.CompletedTask;
+        }
+
+        // NEW: Improved invite tracking method
+        private async Task TrackInviteUsageAsync(SocketGuildUser user)
+        {
+            try
+            {
+                var guild = user.Guild;
+                
+                // Check if we have cached invites for this guild
+                if (!_inviteCache.ContainsKey(guild.Id))
+                {
+                    _logger.LogWarning("[InviteTracking] No cached invites found for guild {GuildName}. Initializing...", guild.Name);
+                    var invites = await guild.GetInvitesAsync();
+                    _inviteCache[guild.Id] = invites.ToList();
+                    return;
+                }
+
+                var oldInvites = _inviteCache[guild.Id];
+                var newInvites = await guild.GetInvitesAsync();
+
+                // Find the invite that was used by this user
+                var usedInvite = newInvites.FirstOrDefault(inv => 
+                    oldInvites.Any(old => old.Code == inv.Code && old.Uses < inv.Uses));
+
+                if (usedInvite != null)
+                {
+                    var inviterName = usedInvite.Inviter?.Username ?? "Unknown";
+                    _logger.LogInformation("[InviteTracking] {Username} joined via invite {Code} from {InviterName} (Uses: {OldUses} → {NewUses})", 
+                        user.Username, usedInvite.Code, inviterName, 
+                        oldInvites.First(old => old.Code == usedInvite.Code).Uses, 
+                        usedInvite.Uses);
+                }
+                else
+                {
+                    _logger.LogInformation("[InviteTracking] {Username} joined without a known invite", user.Username);
+                }
+
+                // Update the cache with new invite data
+                _inviteCache[guild.Id] = newInvites.ToList();
+                _logger.LogInformation("[InviteTracking] Updated invite cache for guild {GuildName}", guild.Name);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "[Error] Failed to track invite usage for user {Username}", user.Username);
             }
         }
 
@@ -212,17 +315,18 @@ namespace Onboarding_bot.Services
                     return false;
                 }
 
-                // Get recent messages (last 200 messages to be sure)
-                var messages = await storyChannel.GetMessagesAsync(200).FlattenAsync();
+                // OPTIMIZATION: Check only last 50 messages instead of 200 for better performance
+                var messages = await storyChannel.GetMessagesAsync(50).FlattenAsync();
                 _logger.LogInformation("[CheckStory] Checking {MessageCount} messages in story channel for user {Username}", messages.Count(), user.Username);
                 
-                foreach (var message in messages)
+                // OPTIMIZATION: Use LINQ for better performance
+                var hasExistingStory = messages.Any(message => 
                 {
                     // Check if user is mentioned in the message
                     if (message.MentionedUserIds.Contains(user.Id))
                     {
-                        _logger.LogInformation("[CheckStory] Found existing story for user {Username} by mention in message {MessageId} (Content: {Content})", 
-                            user.Username, message.Id, message.Content?.Substring(0, Math.Min(50, message.Content?.Length ?? 0)));
+                        _logger.LogInformation("[CheckStory] Found existing story for user {Username} by mention in message {MessageId}", 
+                            user.Username, message.Id);
                         return true;
                     }
                     
@@ -235,11 +339,19 @@ namespace Onboarding_bot.Services
                         
                         if (content.Contains(username) || (!string.IsNullOrEmpty(nickname) && content.Contains(nickname)))
                         {
-                            _logger.LogInformation("[CheckStory] Found existing story for user {Username} by name match in message {MessageId} (Content: {Content})", 
-                                user.Username, message.Id, message.Content.Substring(0, Math.Min(50, message.Content.Length)));
+                            _logger.LogInformation("[CheckStory] Found existing story for user {Username} by name match in message {MessageId}", 
+                                user.Username, message.Id);
                             return true;
                         }
                     }
+                    
+                    return false;
+                });
+                
+                if (hasExistingStory)
+                {
+                    _logger.LogInformation("[CheckStory] User {Username} has existing story - considered OLD member", user.Username);
+                    return true;
                 }
                 
                 _logger.LogInformation("[CheckStory] No existing story found for user {Username} in story channel. User is considered NEW.", user.Username);
@@ -307,11 +419,11 @@ namespace Onboarding_bot.Services
             }
         }
 
-        private async Task HandleMessageReceivedAsync(SocketMessage message)
+        private Task HandleMessageReceivedAsync(SocketMessage message)
         {
             try
             {
-                if (message.Author.IsBot) return;
+                if (message.Author.IsBot) return Task.CompletedTask;
 
                 // Only handle prefix commands if slash commands fail
                 if (message.Content.StartsWith("/join"))
@@ -320,7 +432,19 @@ namespace Onboarding_bot.Services
                     if (user != null)
                     {
                         _logger.LogInformation("[Message] Handling /join command from {Username}", user.Username);
-                        await HandleJoinCommandAsync(user, message.Channel);
+                        
+                        // Handle join command in background to prevent blocking
+                        _ = Task.Run(async () =>
+                        {
+                            try
+                            {
+                                await HandleJoinCommandAsync(user, message.Channel);
+                            }
+                            catch (Exception ex)
+                            {
+                                _logger.LogError(ex, "[Error] Failed to handle join command for {Username}", user.Username);
+                            }
+                        });
                     }
                 }
             }
@@ -328,6 +452,8 @@ namespace Onboarding_bot.Services
             {
                 _logger.LogError(ex, "[Error] Failed to handle message");
             }
+            
+            return Task.CompletedTask;
         }
 
         public async Task UpdateUserRolesAsync(SocketGuildUser user, bool removeOutsider = false, bool addAssociate = false, bool addOutsider = false)
@@ -432,13 +558,9 @@ namespace Onboarding_bot.Services
             {
                 _logger.LogInformation("[NewUser] Starting onboarding for user {Username}", user.Username);
 
-                // Get current invite uses to compare
-                var currentInvites = await user.Guild.GetInvitesAsync();
-                var inviteUses = _inviteUses;
-
-                // Get inviter information
+                // Get inviter information using the cached invite data
                 var (inviterName, inviterId, inviterRole, inviterStory) = 
-                    await _onboardingHandler.GetInviterInfoAsync(user, inviteUses);
+                    await GetInviterInfoFromCacheAsync(user);
 
                 bool hasInvite = inviterId != 0 && inviterName != "غير معروف";
                 
@@ -461,17 +583,72 @@ namespace Onboarding_bot.Services
                 // Update user roles
                 await UpdateUserRolesAsync(user, removeOutsider: true, addAssociate: true);
 
-                // Update invite tracking
-                foreach (var invite in currentInvites)
-                {
-                    _inviteUses[invite.Code] = invite.Uses ?? 0;
-                }
-
                 _logger.LogInformation("[Join] Completed onboarding for user {Username} with invite status: {HasInvite}", user.Username, hasInvite);
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "[Error] Failed to handle new user in join command");
+            }
+        }
+
+        // NEW: Get inviter info from cache instead of old dictionary
+        private async Task<(string inviterName, ulong inviterId, string inviterRole, string inviterStory)> GetInviterInfoFromCacheAsync(SocketGuildUser user)
+        {
+            try
+            {
+                var guild = user.Guild;
+                
+                if (!_inviteCache.ContainsKey(guild.Id))
+                {
+                    _logger.LogWarning("[InviterInfo] No cached invites found for guild {GuildName}", guild.Name);
+                    return ("غير معروف", 0, "بدون رول", "");
+                }
+
+                var oldInvites = _inviteCache[guild.Id];
+                var newInvites = await guild.GetInvitesAsync();
+
+                // Find the invite that was used by this user
+                var usedInvite = newInvites.FirstOrDefault(inv => 
+                    oldInvites.Any(old => old.Code == inv.Code && old.Uses < inv.Uses));
+
+                if (usedInvite == null)
+                {
+                    _logger.LogInformation("[InviterInfo] No invite found for user {Username}", user.Username);
+                    return ("غير معروف", 0, "بدون رول", "");
+                }
+
+                var inviterName = usedInvite.Inviter?.Username ?? "غير معروف";
+                var inviterId = usedInvite.Inviter?.Id ?? 0;
+                string inviterRole = string.Empty;
+                string inviterStory = string.Empty;
+
+                if (inviterId != 0)
+                {
+                    var inviterUser = guild.GetUser(inviterId);
+                    if (inviterUser != null)
+                    {
+                        var topRole = inviterUser.Roles
+                            .Where(r => r.Id != guild.EveryoneRole.Id)
+                            .OrderByDescending(r => r.Position)
+                            .FirstOrDefault();
+                        inviterRole = topRole?.Name ?? "بدون رول";
+
+                        inviterStory = _onboardingHandler.GetStoryService().LoadStory(inviterId) ?? string.Empty;
+                        
+                        _logger.LogInformation("[InviterInfo] Inviter details: {InviterName} ({InviterId}), Role: {Role}, HasStory: {HasStory}", 
+                            inviterName, inviterId, inviterRole, !string.IsNullOrEmpty(inviterStory));
+                    }
+                }
+
+                _logger.LogInformation("[InviterInfo] Final result for {Username}: Inviter={InviterName} ({InviterId}), Role={Role}, UsedInvite={UsedInviteCode}", 
+                    user.Username, inviterName, inviterId, inviterRole, usedInvite.Code);
+
+                return (inviterName, inviterId, inviterRole, inviterStory);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "[Error] Failed to get inviter info from cache for user {Username}", user.Username);
+                return ("غير معروف", 0, "بدون رول", "");
             }
         }
 
@@ -521,6 +698,6 @@ namespace Onboarding_bot.Services
         }
 
         public DiscordSocketClient GetClient() => _client;
-        public Dictionary<string, int> GetInviteUses() => _inviteUses;
+        public Dictionary<ulong, List<RestInviteMetadata>> GetInviteCache() => _inviteCache;
     }
 }

@@ -41,3 +41,4 @@ E:\Nour Eldeen\Study\Self Study\Onboarding bot\obj\Debug\net8.0\refint\Onboardin
 E:\Nour Eldeen\Study\Self Study\Onboarding bot\obj\Debug\net8.0\Onboardingbot.pdb
 E:\Nour Eldeen\Study\Self Study\Onboarding bot\obj\Debug\net8.0\Onboardingbot.genruntimeconfig.cache
 E:\Nour Eldeen\Study\Self Study\Onboarding bot\obj\Debug\net8.0\ref\Onboardingbot.dll
+E:\Nour Eldeen\Study\Self Study\Onboarding bot\obj\Debug\net8.0\Onboardingbot.sourcelink.json

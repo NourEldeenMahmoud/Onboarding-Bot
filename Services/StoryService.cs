@@ -174,10 +174,10 @@ Hidden Docks، Tech Lab، Abandoned Warehouse، وغيرها.
                     .WithColor(hasInvite ? Color.Green : Color.Orange)
                     .WithThumbnailUrl(user.GetAvatarUrl() ?? "")
                     .WithTimestamp(DateTimeOffset.UtcNow)
-                    .WithFooter(footer => footer.Text = hasInvite ? "🟢 عضو بإنفايت" : "🟠 عضو بدون إنفايت")
+                    .WithFooter(footer => footer.Text = $"UserID: {user.Id} | {(hasInvite ? "🟢 عضو بإنفايت" : "🟠 عضو بدون إنفايت")}")
                     .Build();
 
-                await storyChannel.SendMessageAsync(embed: embed);
+                await storyChannel.SendMessageAsync(text: user.Mention, embed: embed);
                 _logger.LogInformation("[Story] Story sent to channel successfully for user {Username}", user.Username);
             }
             catch (Exception ex)

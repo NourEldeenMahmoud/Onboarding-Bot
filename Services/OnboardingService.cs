@@ -34,30 +34,35 @@ namespace Onboarding_bot.Services
 
                 _logger.LogInformation("[Inviter] Checking invites for user {Username}. Found {InviteCount} invites", user.Username, invitesAfter.Count);
 
-                // Log all current invite states
+                // Log all current invite states and compare with previous
+                _logger.LogInformation("[Inviter] Current invite states vs previous tracking:");
                 foreach (var invite in invitesAfter)
                 {
                     var previousUses = inviteUses.ContainsKey(invite.Code) ? inviteUses[invite.Code] : 0;
                     var currentUses = invite.Uses ?? 0;
+                    var difference = currentUses - previousUses;
                     
-                    _logger.LogInformation("[Inviter] Invite {Code}: Previous uses: {Previous}, Current uses: {Current}, Inviter: {InviterName}", 
-                        invite.Code, previousUses, currentUses, invite.Inviter?.Username ?? "Unknown");
+                    _logger.LogInformation("[Inviter] Invite {Code}: Previous={Previous}, Current={Current}, Difference={Difference}, Inviter={InviterName}", 
+                        invite.Code, previousUses, currentUses, difference, invite.Inviter?.Username ?? "Unknown");
                 }
 
                 // Find the invite that was used by this user
                 RestInviteMetadata? usedInvite = null;
+                int maxDifference = 0;
+                
                 foreach (var invite in invitesAfter)
                 {
                     var previousUses = inviteUses.ContainsKey(invite.Code) ? inviteUses[invite.Code] : 0;
                     var currentUses = invite.Uses ?? 0;
+                    var difference = currentUses - previousUses;
                     
-                    // Check if this invite was used (current > previous)
-                    if (currentUses > previousUses)
+                    // Check if this invite was used (current > previous) and find the one with biggest increase
+                    if (difference > 0 && difference > maxDifference)
                     {
                         usedInvite = invite;
-                        _logger.LogInformation("[Inviter] Found used invite: {Code} by {InviterName} (Uses increased from {Previous} to {Current})", 
-                            invite.Code, invite.Inviter?.Username ?? "Unknown", previousUses, currentUses);
-                        break;
+                        maxDifference = difference;
+                        _logger.LogInformation("[Inviter] Found potential used invite: {Code} by {InviterName} (Uses increased from {Previous} to {Current}, difference: {Difference})", 
+                            invite.Code, invite.Inviter?.Username ?? "Unknown", previousUses, currentUses, difference);
                     }
                 }
 
@@ -90,8 +95,8 @@ namespace Onboarding_bot.Services
                     }
                 }
 
-                _logger.LogInformation("[Inviter] Final result for {Username}: Inviter={InviterName} ({InviterId}), Role={Role}", 
-                    user.Username, inviterName, inviterId, inviterRole);
+                _logger.LogInformation("[Inviter] Final result for {Username}: Inviter={InviterName} ({InviterId}), Role={Role}, UsedInvite={UsedInviteCode}", 
+                    user.Username, inviterName, inviterId, inviterRole, usedInvite?.Code ?? "None");
 
                 return (inviterName, inviterId, inviterRole, inviterStory);
             }

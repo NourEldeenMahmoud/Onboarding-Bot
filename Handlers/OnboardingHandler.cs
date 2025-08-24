@@ -85,5 +85,10 @@ namespace Onboarding_bot.Handlers
         {
             await _storyService.SendStoryToChannelAsync(user, story, hasInvite, discordService);
         }
+
+        public StoryService GetStoryService()
+        {
+            return _storyService;
+        }
     }
 }
