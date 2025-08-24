@@ -1,0 +1,213 @@
+using Discord;
+using Discord.WebSocket;
+using Discord.Rest;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
+using Onboarding_bot.Services;
+using System.Linq;
+
+namespace Onboarding_bot.Services
+{
+    public class OnboardingService
+    {
+        private readonly ILogger<OnboardingService> _logger;
+        private readonly StoryService _storyService;
+        private readonly DiscordSocketClient _client;
+
+        public OnboardingService(
+            ILogger<OnboardingService> logger,
+            StoryService storyService,
+            DiscordSocketClient client)
+        {
+            _logger = logger;
+            _storyService = storyService;
+            _client = client;
+        }
+
+        public async Task<(string inviterName, ulong inviterId, string inviterRole, string inviterStory)> GetInviterInfoAsync(
+            SocketGuildUser user, Dictionary<string, int> inviteUses)
+        {
+            try
+            {
+                var guild = user.Guild;
+                var invitesAfter = await guild.GetInvitesAsync();
+
+                RestInviteMetadata usedInvite = null;
+                foreach (var invite in invitesAfter)
+                {
+                    var previousUses = inviteUses.ContainsKey(invite.Code) ? inviteUses[invite.Code] : 0;
+                    if ((invite.Uses ?? 0) > previousUses)
+                    {
+                        usedInvite = invite;
+                        break;
+                    }
+                }
+
+                // Update invite uses
+                foreach (var invite in invitesAfter)
+                    inviteUses[invite.Code] = invite.Uses ?? 0;
+
+                string inviterName = usedInvite?.Inviter?.Username ?? "غير معروف";
+                ulong inviterId = usedInvite?.Inviter?.Id ?? 0;
+                string inviterStory = "";
+
+                if (inviterId != 0)
+                {
+                    var inviterUser = guild.GetUser(inviterId);
+                    var inviterRole = inviterUser?.Roles
+                        .Where(r => r.Id != guild.EveryoneRole.Id)
+                        .OrderByDescending(r => r.Position)
+                        .FirstOrDefault()?.Name ?? "بدون رول";
+
+                    inviterStory = _storyService.LoadStory(inviterId);
+
+                    return (inviterName, inviterId, inviterRole, inviterStory);
+                }
+
+                return ("غير معروف", 0, "بدون رول", "");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "[Error] Failed to get inviter info");
+                return ("غير معروف", 0, "بدون رول", "");
+            }
+        }
+
+        public async Task<Dictionary<string, string>> ConductOnboardingAsync(SocketGuildUser user)
+        {
+            var responses = new Dictionary<string, string>();
+            var thread = await CreatePrivateThreadAsync(user);
+
+            try
+            {
+                // Send welcome message
+                var welcomeEmbed = new EmbedBuilder()
+                    .WithTitle("🎭 مرحباً بك في العائلة!")
+                    .WithDescription($"أهلاً {user.Username}! 🎭\nقبل ما تبدأ، عايزين نعرف شوية حاجات عنك.")
+                    .WithColor(Color.DarkBlue)
+                    .WithTimestamp(DateTimeOffset.UtcNow)
+                    .Build();
+
+                await thread.SendMessageAsync(embed: welcomeEmbed);
+
+                // Ask questions
+                responses["name"] = await AskQuestionAsync(thread, "اسمك الحقيقي ايه؟");
+                responses["age"] = await AskQuestionAsync(thread, "سنك كام؟");
+                responses["interest"] = await AskQuestionAsync(thread, "داخل السرفر ليه؟");
+                responses["specialty"] = await AskQuestionAsync(thread, "تخصصك أو شغفك؟");
+                responses["strength"] = await AskQuestionAsync(thread, "أهم ميزة عندك؟");
+                responses["weakness"] = await AskQuestionAsync(thread, "أكبر عيب عندك؟");
+                responses["favoritePlace"] = await AskQuestionAsync(thread, "مكان بتحبه تروح له؟");
+
+                // Send completion message
+                var completionEmbed = new EmbedBuilder()
+                    .WithTitle("✅ تم الانتهاء!")
+                    .WithDescription("قصتك جاهزة… تقدر تشوفها في قناة القصص.")
+                    .WithColor(Color.Green)
+                    .WithTimestamp(DateTimeOffset.UtcNow)
+                    .Build();
+
+                await thread.SendMessageAsync(embed: completionEmbed);
+
+                return responses;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "[Error] Failed to conduct onboarding");
+                throw;
+            }
+            finally
+            {
+                // Close thread after a delay
+                await Task.Delay(5000);
+                await thread.DeleteAsync();
+            }
+        }
+
+        private async Task<IThreadChannel> CreatePrivateThreadAsync(SocketGuildUser user)
+        {
+            try
+            {
+                var cityGatesChannelIdStr = Environment.GetEnvironmentVariable("DISCORD_CITY_GATES_CHANNEL_ID");
+                if (string.IsNullOrEmpty(cityGatesChannelIdStr) || !ulong.TryParse(cityGatesChannelIdStr, out var cityGatesChannelId))
+                {
+                    throw new InvalidOperationException("City Gates channel ID not found in environment variables");
+                }
+
+                var cityGatesChannel = user.Guild.GetChannel(cityGatesChannelId) as ITextChannel;
+
+                if (cityGatesChannel == null)
+                {
+                    throw new InvalidOperationException("City Gates channel not found");
+                }
+
+                var thread = await cityGatesChannel.CreateThreadAsync(
+                    name: $"onboarding-{user.Username}",
+                    type: ThreadType.PrivateThread,
+                    invitable: false);
+
+                await thread.AddUserAsync(user);
+                return thread;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "[Error] Failed to create private thread");
+                throw;
+            }
+        }
+
+        private async Task<string> AskQuestionAsync(IThreadChannel thread, string question)
+        {
+            var questionEmbed = new EmbedBuilder()
+                .WithTitle("❓ سؤال")
+                .WithDescription(question)
+                .WithColor(Color.Blue)
+                .WithTimestamp(DateTimeOffset.UtcNow)
+                .Build();
+
+            await thread.SendMessageAsync(embed: questionEmbed);
+            return await WaitForUserResponseAsync(thread);
+        }
+
+        private async Task<string> WaitForUserResponseAsync(IThreadChannel thread, int timeoutSeconds = 60)
+        {
+            var tcs = new TaskCompletionSource<string>();
+            var userId = thread.OwnerId;
+
+            Task Handler(SocketMessage msg)
+            {
+                if (msg.Channel.Id == thread.Id && msg.Author.Id == userId && !msg.Author.IsBot)
+                {
+                    tcs.TrySetResult(msg.Content);
+                }
+                return Task.CompletedTask;
+            }
+
+            _client.MessageReceived += Handler;
+
+            try
+            {
+                var resultTask = tcs.Task;
+                if (await Task.WhenAny(resultTask, Task.Delay(timeoutSeconds * 1000)) == resultTask)
+                {
+                    return resultTask.Result;
+                }
+                else
+                {
+                    _logger.LogWarning("[Timeout] User did not respond in time.");
+                    return "لم يتم الرد في الوقت المحدد";
+                }
+            }
+            finally
+            {
+                _client.MessageReceived -= Handler;
+            }
+        }
+
+        public async Task<bool> HasInviteAsync(SocketGuildUser user, Dictionary<string, int> inviteUses)
+        {
+            var (inviterName, inviterId, _, _) = await GetInviterInfoAsync(user, inviteUses);
+            return inviterId != 0 && inviterName != "غير معروف";
+        }
+    }
+}

@@ -1,93 +1,61 @@
-# Onboarding Bot - Discord Bot
+# Onboarding Bot
 
-## 🎭 وصف البوت
+Discord bot for handling user onboarding with AI-generated stories.
 
-بوت Discord متخصص في ترحيب الأعضاء الجدد وإنشاء قصص شخصية لهم باستخدام الذكاء الاصطناعي. البوت مصمم لسيرفرات المافيا والـ Roleplay.
+## Features
 
-## ✨ المميزات الجديدة
+- Automated onboarding process with private threads
+- AI-generated stories using OpenAI GPT-4
+- Role management (Outsider → Associate)
+- Invite tracking and inviter information
+- Story storage and retrieval
+- Existing user detection
 
-### 🔧 التحسينات الأخيرة
-- **إصلاح مشكلة الـ Invite المجهول**: البوت الآن يظهر بوضوح من دعا كل عضو
-- **معالجة الأعضاء القدامى**: البوت يتعرف على الأعضاء الذين لديهم قصص مسبقة ويرحب بهم بدون إعادة التسجيل
-- **تتبع معلومات الدعوات**: حفظ معلومات الدعوات في ملف منفصل للرجوع إليها لاحقاً
-- **أمر جديد `/invite`**: لعرض معلومات الدعوة لأي عضو
-- **تحسين رسائل الترحيب**: رسائل أكثر وضوحاً وتفصيلاً
+## Environment Variables
 
-### 🎯 المميزات الأساسية
-- **إنشاء قصص شخصية**: استخدام OpenAI لإنشاء قصص مخصصة لكل عضو
-- **نظام الأسئلة التفاعلي**: أسئلة في قناة مخصصة للتعرف على الأعضاء الجدد
-- **نظام الرولز التلقائي**: إعطاء رولز بناءً على إجابة الأسئلة
-- **تتبع الدعوات**: معرفة من دعا كل عضو
-- **أوامر Slash**: أوامر سهلة الاستخدام
+Set these environment variables in your deployment platform:
 
-## 🚀 التثبيت والتشغيل
+- `DISCORD_TOKEN`: Your Discord bot token
+- `OPENAI_KEY`: Your OpenAI API key
 
-### المتطلبات
-- .NET 8.0
-- Discord Bot Token
-- OpenAI API Key
+## Configuration
 
-### متغيرات البيئة المطلوبة
-```env
-DISCORD_TOKEN=your_discord_bot_token
-OPENAI_KEY=your_openai_api_key
-STORY_CHANNEL_ID=channel_id_for_stories
-JOIN_FAMILY_CHANNEL_ID=channel_id_for_onboarding
-OWNER_ID=your_discord_user_id
-LOG_CHANNEL_ID=channel_id_for_logs
-ASSOCIATE_ROLE_ID=role_id_for_associates
-OUTSIDER_ROLE_ID=role_id_for_outsiders
+Update `appsettings.json` with your Discord server IDs:
+
+```json
+{
+  "Discord": {
+    "StoryChannelId": 1405280966422958100,
+    "CityGatesChannelId": 0,
+    "OutsiderRoleId": 0,
+    "AssociateRoleId": 0,
+    "GuildId": 0
+  }
+}
 ```
 
-### خطوات التشغيل
-1. انسخ ملف `.env.example` إلى `.env` واملأ المتغيرات
-2. شغل الأمر: `dotnet run`
-3. البوت سيعمل تلقائياً ويبدأ في مراقبة انضمام الأعضاء
+## Deployment on Render
 
-## 📋 الأوامر المتاحة
+1. Connect your GitHub repository to Render
+2. Create a new Web Service
+3. Set the following:
+   - **Build Command**: `dotnet build -c Release -o out`
+   - **Start Command**: `dotnet out/Onboardingbot.dll`
+   - **Environment**: Docker
+4. Add environment variables:
+   - `DISCORD_TOKEN`
+   - `OPENAI_KEY`
+5. Deploy!
 
-### `/story @user`
-عرض قصة عضو معين
+## Usage
 
-### `/invite @user`
-عرض معلومات الدعوة لعضو معين (من دعاه، كود الدعوة، تاريخ الانضمام)
+Users can join the family by typing `!join` in the City Gates channel.
 
-## 🔧 كيفية العمل
+## Bot Permissions
 
-### للأعضاء الجدد:
-1. عند انضمام عضو جديد، البوت يتحقق من وجود قصة مسبقة
-2. إذا لم توجد قصة، يبدأ عملية الأسئلة في قناة Join the Family
-3. بعد الإجابة على الأسئلة، يتم إنشاء قصة شخصية
-4. يتم إعطاء رول مناسب بناءً على الإجابات
-
-### للأعضاء القدامى:
-1. البوت يتعرف على الأعضاء الذين لديهم قصص مسبقة
-2. يرسل رسالة ترحيب خاصة بدون إعادة التسجيل
-3. يعطي رول Associate تلقائياً
-
-### تتبع الدعوات:
-1. البوت يحفظ معلومات كل دعوة في ملف `invite_history.json`
-2. يمكن معرفة من دعا أي عضو باستخدام أمر `/invite`
-3. معلومات الدعوة تظهر في القصص المنشورة
-
-## 📁 ملفات البيانات
-
-- `stories.json`: قصص الأعضاء
-- `invite_history.json`: تاريخ الدعوات
-- `.env`: متغيرات البيئة
-
-## 🛠️ التحسينات التقنية
-
-- إزالة الاعتماد على ASP.NET Core (تبسيط البوت)
-- تحسين معالجة الأخطاء
-- إزالة الدوال غير المستخدمة
-- تحسين تتبع الـ Invites
-- إصلاح مشاكل التسمية المتغيرة
-
-## 📞 الدعم
-
-لأي استفسارات أو مشاكل، يرجى التواصل مع المطور.
-
-
-
-
+The bot needs the following permissions:
+- Send Messages
+- Create Private Threads
+- Manage Roles
+- Read Message History
+- Mention Everyone (for story channel)
