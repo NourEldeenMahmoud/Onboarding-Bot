@@ -50,7 +50,9 @@ namespace Onboarding_bot.Controllers
                     HasCityGates = !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("DISCORD_CITY_GATES_CHANNEL_ID")),
                     HasOutsiderRole = !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("DISCORD_OUTSIDER_ROLE_ID")),
                     HasAssociateRole = !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("DISCORD_ASSOCIATE_ROLE_ID")),
-                    HasGuildId = !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("DISCORD_GUILD_ID"))
+                    HasOwnerId = !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("OWNER_ID")),
+                    HasLogChannel = !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("LOG_CHANNEL_ID")),
+                    HasPort = !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("PORT"))
                 }
             });
         }
