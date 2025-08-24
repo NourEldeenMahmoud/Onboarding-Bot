@@ -86,13 +86,11 @@ namespace Onboarding_bot.Services
         {
             try
             {
-                // Register slash commands
-                var joinCommand = new Discord.ApplicationCommandProperties
-                {
-                    Name = "join",
-                    Description = "انضم إلى العائلة",
-                    Type = Discord.ApplicationCommandType.Slash
-                };
+                // Register slash commands using SlashCommandBuilder
+                var joinCommand = new Discord.SlashCommandBuilder()
+                    .WithName("join")
+                    .WithDescription("انضم إلى العائلة")
+                    .Build();
 
                 foreach (var guild in _client.Guilds)
                 {
