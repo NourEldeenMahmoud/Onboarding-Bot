@@ -416,8 +416,12 @@ namespace Onboarding_bot.Services
         {
             try
             {
-                // Remove Outsider role and add Associate role
-                await UpdateUserRolesAsync(user, removeOutsider: true, addAssociate: true);
+                // IMPORTANT: First remove Outsider, then add Associate
+                await UpdateUserRolesAsync(user, removeOutsider: true, addAssociate: false);
+                await UpdateUserRolesAsync(user, removeOutsider: false, addAssociate: true);
+                
+                // FINAL CHECK: Ensure role consistency
+                await EnsureRoleConsistencyAsync(user);
 
                 // Send message in City Gates channel if channel is provided
                 if (channel != null)
