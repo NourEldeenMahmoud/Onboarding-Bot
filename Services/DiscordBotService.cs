@@ -82,22 +82,27 @@ namespace Onboarding_bot.Services
             await RegisterCommandsAsync();
         }
 
-        private async Task RegisterCommandsAsync()
+                private async Task RegisterCommandsAsync()
         {
             try
             {
+                _logger.LogInformation("[Commands] Starting command registration...");
+                
                 // Register slash commands using SlashCommandBuilder
                 var joinCommand = new Discord.SlashCommandBuilder()
                     .WithName("join")
                     .WithDescription("انضم إلى العائلة")
                     .Build();
 
+                _logger.LogInformation("[Commands] Built join command: {CommandName}", joinCommand.Name);
+
                 foreach (var guild in _client.Guilds)
                 {
                     try
                     {
+                        _logger.LogInformation("[Commands] Registering command in guild: {GuildName} ({GuildId})", guild.Name, guild.Id);
                         await guild.CreateApplicationCommandAsync(joinCommand);
-                        _logger.LogInformation("[Commands] Registered /join command in guild: {GuildName}", guild.Name);
+                        _logger.LogInformation("[Commands] Successfully registered /join command in guild: {GuildName}", guild.Name);
                     }
                     catch (Exception ex)
                     {
@@ -105,7 +110,7 @@ namespace Onboarding_bot.Services
                     }
                 }
                 
-                _logger.LogInformation("Bot ready with slash commands");
+                _logger.LogInformation("[Commands] Command registration completed");
             }
             catch (Exception ex)
             {
@@ -145,10 +150,20 @@ namespace Onboarding_bot.Services
             // Initialize invite tracking
             foreach (var guild in _client.Guilds)
             {
-                var invites = await guild.GetInvitesAsync();
-                foreach (var invite in invites)
+                try
                 {
-                    _inviteUses[invite.Code] = invite.Uses ?? 0;
+                    var invites = await guild.GetInvitesAsync();
+                    _logger.LogInformation("[Ready] Found {InviteCount} invites in guild {GuildName}", invites.Count, guild.Name);
+                    
+                    foreach (var invite in invites)
+                    {
+                        _inviteUses[invite.Code] = invite.Uses ?? 0;
+                        _logger.LogInformation("[Ready] Tracked invite {Code} with {Uses} uses", invite.Code, invite.Uses ?? 0);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "[Ready] Failed to get invites for guild {GuildName}", guild.Name);
                 }
             }
         }
@@ -189,7 +204,10 @@ namespace Onboarding_bot.Services
                 if (storyChannel == null) return false;
 
                 var messages = await storyChannel.GetMessagesAsync(100).FlattenAsync();
-                return messages.Any(m => m.MentionedUserIds.Contains(user.Id));
+                var hasStory = messages.Any(m => m.MentionedUserIds.Contains(user.Id));
+                
+                _logger.LogInformation("[CheckStory] User {Username} has existing story: {HasStory}", user.Username, hasStory);
+                return hasStory;
             }
             catch (Exception ex)
             {
@@ -227,12 +245,13 @@ namespace Onboarding_bot.Services
             {
                 if (message.Author.IsBot) return;
 
-                // Handle prefix commands (fallback)
+                // Only handle prefix commands if slash commands fail
                 if (message.Content.StartsWith("/join"))
                 {
                     var user = message.Author as SocketGuildUser;
                     if (user != null)
                     {
+                        _logger.LogInformation("[Message] Handling /join command from {Username}", user.Username);
                         await HandleJoinCommandAsync(user, message.Channel);
                     }
                 }
@@ -352,6 +371,10 @@ namespace Onboarding_bot.Services
         {
             try
             {
+                _logger.LogInformation("[NewUser] Starting onboarding for {Username}", user.Username);
+
+                // Get current invite uses to compare
+                var currentInvites = await user.Guild.GetInvitesAsync();
                 var inviteUses = _inviteUses;
 
                 // Get inviter information
@@ -359,6 +382,9 @@ namespace Onboarding_bot.Services
                     await _onboardingHandler.GetInviterInfoAsync(user, inviteUses);
 
                 bool hasInvite = inviterId != 0 && inviterName != "غير معروف";
+                
+                _logger.LogInformation("[NewUser] User {Username} - HasInvite: {HasInvite}, Inviter: {InviterName} ({InviterId})", 
+                    user.Username, hasInvite, inviterName, inviterId);
 
                 // Conduct onboarding
                 var userResponses = await _onboardingHandler.ConductOnboardingAsync(user);
@@ -376,7 +402,13 @@ namespace Onboarding_bot.Services
                 // Update user roles
                 await UpdateUserRolesAsync(user, removeOutsider: true, addAssociate: true);
 
-                _logger.LogInformation("[Join] Completed onboarding for user {Username}", user.Username);
+                // Update invite tracking
+                foreach (var invite in currentInvites)
+                {
+                    _inviteUses[invite.Code] = invite.Uses ?? 0;
+                }
+
+                _logger.LogInformation("[Join] Completed onboarding for user {Username} with invite status: {HasInvite}", user.Username, hasInvite);
             }
             catch (Exception ex)
             {
@@ -390,14 +422,27 @@ namespace Onboarding_bot.Services
             {
                 if (interaction is SocketSlashCommand slashCommand)
                 {
+                    _logger.LogInformation("[Interaction] Received slash command: {CommandName}", slashCommand.Data.Name);
+                    
                     if (slashCommand.Data.Name == "join")
                     {
                         var user = interaction.User as SocketGuildUser;
                         if (user != null)
                         {
-                            await slashCommand.DeferAsync();
-                            await HandleJoinCommandAsync(user, interaction.Channel);
-                            await slashCommand.FollowupAsync("تم تنفيذ الأمر بنجاح!");
+                            _logger.LogInformation("[Interaction] Processing /join for user: {Username}", user.Username);
+                            
+                            try
+                            {
+                                await slashCommand.DeferAsync();
+                                await HandleJoinCommandAsync(user, interaction.Channel);
+                                await slashCommand.FollowupAsync("تم تنفيذ الأمر بنجاح!");
+                                _logger.LogInformation("[Interaction] Successfully processed /join for {Username}", user.Username);
+                            }
+                            catch (Exception ex)
+                            {
+                                _logger.LogError(ex, "[Interaction] Error processing /join for {Username}", user.Username);
+                                await slashCommand.FollowupAsync("حدث خطأ أثناء تنفيذ الأمر.", ephemeral: true);
+                            }
                         }
                     }
                 }

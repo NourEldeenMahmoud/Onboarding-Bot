@@ -32,24 +32,38 @@ namespace Onboarding_bot.Services
                 var guild = user.Guild;
                 var invitesAfter = await guild.GetInvitesAsync();
 
+                _logger.LogInformation("[Inviter] Checking invites for user {Username}. Found {InviteCount} invites", user.Username, invitesAfter.Count);
+
                 RestInviteMetadata usedInvite = null;
                 foreach (var invite in invitesAfter)
                 {
                     var previousUses = inviteUses.ContainsKey(invite.Code) ? inviteUses[invite.Code] : 0;
-                    if ((invite.Uses ?? 0) > previousUses)
+                    var currentUses = invite.Uses ?? 0;
+                    
+                    _logger.LogInformation("[Inviter] Invite {Code}: Previous uses: {Previous}, Current uses: {Current}", 
+                        invite.Code, previousUses, currentUses);
+                    
+                    if (currentUses > previousUses)
                     {
                         usedInvite = invite;
+                        _logger.LogInformation("[Inviter] Found used invite: {Code} by {InviterName}", 
+                            invite.Code, invite.Inviter?.Username ?? "Unknown");
                         break;
                     }
                 }
 
                 // Update invite uses
                 foreach (var invite in invitesAfter)
+                {
                     inviteUses[invite.Code] = invite.Uses ?? 0;
+                }
 
                 string inviterName = usedInvite?.Inviter?.Username ?? "غير معروف";
                 ulong inviterId = usedInvite?.Inviter?.Id ?? 0;
                 string inviterStory = "";
+
+                _logger.LogInformation("[Inviter] Final result for {Username}: Inviter={InviterName} ({InviterId})", 
+                    user.Username, inviterName, inviterId);
 
                 if (inviterId != 0)
                 {
@@ -99,10 +113,18 @@ namespace Onboarding_bot.Services
                 responses["weakness"] = await AskQuestionAsync(thread, "أكبر عيب عندك؟");
                 responses["favoritePlace"] = await AskQuestionAsync(thread, "مكان بتحبه تروح له؟");
 
-                // Send completion message
+                // Send completion message with story channel link
+                var storyChannelIdStr = Environment.GetEnvironmentVariable("DISCORD_STORY_CHANNEL_ID");
+                var storyChannelLink = "";
+                
+                if (!string.IsNullOrEmpty(storyChannelIdStr) && ulong.TryParse(storyChannelIdStr, out var storyChannelId))
+                {
+                    storyChannelLink = $"<#{storyChannelId}>";
+                }
+
                 var completionEmbed = new EmbedBuilder()
                     .WithTitle("✅ تم الانتهاء!")
-                    .WithDescription("قصتك جاهزة… تقدر تشوفها في قناة القصص.")
+                    .WithDescription($"قصتك جاهزة… تقدر تشوفها في قناة القصص {storyChannelLink}")
                     .WithColor(Color.Green)
                     .WithTimestamp(DateTimeOffset.UtcNow)
                     .Build();
