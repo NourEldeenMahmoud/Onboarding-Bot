@@ -3,12 +3,12 @@
   "WorkspaceRootPath": "E:\\Nour Eldeen\\Study\\Self Study\\GitHub\\Onboarding bot\\",
   "Documents": [
     {
-      "AbsoluteMoniker": "D:0:0:{D0835EFB-BE42-4EBD-9CE8-1E2F74508127}|Onboarding bot.csproj|e:\\nour eldeen\\study\\self study\\github\\onboarding bot\\onboarding bot.csproj||{FA3CD31E-987B-443A-9B81-186104E8DAC1}|",
-      "RelativeMoniker": "D:0:0:{D0835EFB-BE42-4EBD-9CE8-1E2F74508127}|Onboarding bot.csproj|solutionrelative:onboarding bot.csproj||{FA3CD31E-987B-443A-9B81-186104E8DAC1}|"
-    },
-    {
       "AbsoluteMoniker": "D:0:0:{D0835EFB-BE42-4EBD-9CE8-1E2F74508127}|Onboarding bot.csproj|e:\\nour eldeen\\study\\self study\\github\\onboarding bot\\program.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
       "RelativeMoniker": "D:0:0:{D0835EFB-BE42-4EBD-9CE8-1E2F74508127}|Onboarding bot.csproj|solutionrelative:program.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{D0835EFB-BE42-4EBD-9CE8-1E2F74508127}|Onboarding bot.csproj|e:\\nour eldeen\\study\\self study\\github\\onboarding bot\\onboarding bot.csproj||{FA3CD31E-987B-443A-9B81-186104E8DAC1}|",
+      "RelativeMoniker": "D:0:0:{D0835EFB-BE42-4EBD-9CE8-1E2F74508127}|Onboarding bot.csproj|solutionrelative:onboarding bot.csproj||{FA3CD31E-987B-443A-9B81-186104E8DAC1}|"
     }
   ],
   "DocumentGroupContainers": [
@@ -18,12 +18,12 @@
       "DocumentGroups": [
         {
           "DockedWidth": 200,
-          "SelectedChildIndex": 0,
+          "SelectedChildIndex": 1,
           "Children": [
             {
               "$type": "Document",
-              "DocumentIndex": 0,
-              "Title": "Onboarding bot",
+              "DocumentIndex": 1,
+              "Title": "Onboarding bot.csproj",
               "DocumentMoniker": "E:\\Nour Eldeen\\Study\\Self Study\\GitHub\\Onboarding bot\\Onboarding bot.csproj",
               "RelativeDocumentMoniker": "Onboarding bot.csproj",
               "ToolTip": "E:\\Nour Eldeen\\Study\\Self Study\\GitHub\\Onboarding bot\\Onboarding bot.csproj",
@@ -35,13 +35,13 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 1,
+              "DocumentIndex": 0,
               "Title": "Program.cs",
               "DocumentMoniker": "E:\\Nour Eldeen\\Study\\Self Study\\GitHub\\Onboarding bot\\Program.cs",
               "RelativeDocumentMoniker": "Program.cs",
-              "ToolTip": "E:\\Nour Eldeen\\Study\\Self Study\\GitHub\\Onboarding bot\\Program.cs",
-              "RelativeToolTip": "Program.cs",
-              "ViewState": "AgIAALQAAAAAAAAAAAA2wNMAAAAFAAAAAAAAAA==",
+              "ToolTip": "E:\\Nour Eldeen\\Study\\Self Study\\GitHub\\Onboarding bot\\Program.cs*",
+              "RelativeToolTip": "Program.cs*",
+              "ViewState": "AgIAAIkAAAAAAAAAAAAAALYAAAAjAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
               "WhenOpened": "2025-08-15T14:49:42.395Z",
               "EditorCaption": ""
