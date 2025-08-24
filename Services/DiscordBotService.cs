@@ -264,7 +264,7 @@ namespace Onboarding_bot.Services
                 {
                     var embed = new EmbedBuilder()
                     .WithTitle("🎭 مرحباً بعودتك!")
-                    .WithDescription("انته قديم… كنت موجود قبل كده. تم تحديث وضعك.")
+                    .WithDescription("انته عضو قديم في العائلة… welcome back\n Role : Associate .")
                     .WithColor(Color.Green)
                     .WithTimestamp(DateTimeOffset.UtcNow)
                     .Build();

@@ -112,7 +112,7 @@ namespace Onboarding_bot.Services
                 // Send welcome message
                 var welcomeEmbed = new EmbedBuilder()
                     .WithTitle("🎭 مرحباً بك في العائلة!")
-                    .WithDescription($"أهلاً {user.Username}! 🎭\nقبل ما تبدأ، عايزين نعرف شوية حاجات عنك.")
+                    .WithDescription($"أهلاً {user.Username}! 🎭\n  قبل ما تبدأ، عايزين نعرف شوية حاجات عنك. البوت هيسألك 4 اساله وانته هتجاوب عليهم , مش لازم تجاوب اجابات نموذجية او حقيقية 100%  ")
                     .WithColor(Color.DarkBlue)
                     .WithTimestamp(DateTimeOffset.UtcNow)
                     .Build();
@@ -120,13 +120,10 @@ namespace Onboarding_bot.Services
                 await thread.SendMessageAsync(embed: welcomeEmbed);
 
                 // Ask questions
-                responses["name"] = await AskQuestionAsync(thread, user, "اسمك الحقيقي ايه؟");
-                responses["age"] = await AskQuestionAsync(thread, user, "سنك كام؟");
-                responses["interest"] = await AskQuestionAsync(thread, user, "داخل السرفر ليه؟");
-                responses["specialty"] = await AskQuestionAsync(thread, user, "تخصصك أو شغفك؟");
-                responses["strength"] = await AskQuestionAsync(thread, user, "أهم ميزة عندك؟");
-                responses["weakness"] = await AskQuestionAsync(thread, user, "أكبر عيب عندك؟");
-                responses["favoritePlace"] = await AskQuestionAsync(thread, user, "مكان بتحبه تروح له؟");
+                responses["expectation"] = await AskQuestionAsync(thread, user, "متوقع انك تستفيد إيه من السيرفر ده؟");
+                responses["mafiaNickname"] = await AskQuestionAsync(thread, user, "لو إنت عضو في المافيا الإيطالية، لقبك هيبقى إيه؟");
+                responses["superpower"] = await AskQuestionAsync(thread, user, "لو معاك قدرة خارقة واحدة بس، تختار تبقى إيه وليه؟");
+                responses["prosAndCons"] = await AskQuestionAsync(thread, user, "ايه اهم ميزه , اكبر عيب فيك ؟");
 
                 // Send completion message with story channel link
                 var storyChannelIdStr = Environment.GetEnvironmentVariable("DISCORD_STORY_CHANNEL_ID");
@@ -139,7 +136,7 @@ namespace Onboarding_bot.Services
 
                 var completionEmbed = new EmbedBuilder()
                     .WithTitle("✅ تم الانتهاء!")
-                    .WithDescription($"قصتك جاهزة… تقدر تشوفها في قناة القصص {storyChannelLink}")
+                    .WithDescription($"قصتك هتبقي جاهزه في خلال دقيقة … تقدر تشوفها في قناة القصص {storyChannelLink}")
                     .WithColor(Color.Green)
                     .WithTimestamp(DateTimeOffset.UtcNow)
                     .Build();
