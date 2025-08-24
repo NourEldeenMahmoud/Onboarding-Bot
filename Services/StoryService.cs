@@ -125,18 +125,31 @@ Hidden Docks، Tech Lab، Abandoned Warehouse، والمزيد.
         {
             try
             {
-                var storyChannelIdStr = Environment.GetEnvironmentVariable("DISCORD_STORY_CHANNEL_ID");
-                if (string.IsNullOrEmpty(storyChannelIdStr) || !ulong.TryParse(storyChannelIdStr, out var storyChannelId))
+                if (discordService == null)
                 {
-                    _logger.LogError("Story channel ID not found in environment variables");
+                    _logger.LogError("[Story] DiscordBotService is null - cannot send story to channel");
                     return;
                 }
 
-                var storyChannel = discordService.GetClient().GetChannel(storyChannelId) as IMessageChannel;
+                var storyChannelIdStr = Environment.GetEnvironmentVariable("DISCORD_STORY_CHANNEL_ID");
+                if (string.IsNullOrEmpty(storyChannelIdStr) || !ulong.TryParse(storyChannelIdStr, out var storyChannelId))
+                {
+                    _logger.LogError("[Story] Story channel ID not found in environment variables");
+                    return;
+                }
+
+                var client = discordService.GetClient();
+                if (client == null)
+                {
+                    _logger.LogError("[Story] Discord client is null - cannot send story to channel");
+                    return;
+                }
+
+                var storyChannel = client.GetChannel(storyChannelId) as IMessageChannel;
 
                 if (storyChannel == null)
                 {
-                    _logger.LogError("Story channel not found");
+                    _logger.LogError("[Story] Story channel not found: {ChannelId}", storyChannelId);
                     return;
                 }
 
@@ -150,11 +163,11 @@ Hidden Docks، Tech Lab، Abandoned Warehouse، والمزيد.
                     .Build();
 
                 await storyChannel.SendMessageAsync(embed: embed);
-                _logger.LogInformation("[Story] Story sent to channel successfully");
+                _logger.LogInformation("[Story] Story sent to channel successfully for user {Username}", user.Username);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "[Error] Failed to send story to channel");
+                _logger.LogError(ex, "[Error] Failed to send story to channel for user {Username}", user.Username);
             }
         }
 

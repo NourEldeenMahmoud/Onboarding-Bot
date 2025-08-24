@@ -22,7 +22,7 @@ namespace Onboarding_bot.Handlers
             _storyService = storyService;
         }
 
-        public async Task HandleNewUserAsync(SocketGuildUser user, Dictionary<string, int> inviteUses)
+        public async Task HandleNewUserAsync(SocketGuildUser user, Dictionary<string, int> inviteUses, DiscordBotService discordService)
         {
             try
             {
@@ -45,7 +45,7 @@ namespace Onboarding_bot.Handlers
                 _storyService.SaveStory(user.Id, story);
 
                 // Send story to channel
-                await _storyService.SendStoryToChannelAsync(user, story, hasInvite, null);
+                await _storyService.SendStoryToChannelAsync(user, story, hasInvite, discordService);
 
                 // Update user roles - this will be handled by the calling service
                 _logger.LogInformation("[Onboarding] User roles update requested for {Username}", user.Username);

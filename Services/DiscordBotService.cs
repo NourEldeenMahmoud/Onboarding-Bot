@@ -182,8 +182,10 @@ namespace Onboarding_bot.Services
                     return;
                 }
 
-                // Handle new user onboarding
-                await _onboardingHandler.HandleNewUserAsync(user, _inviteUses);
+                // For new users, just add Outsider role - DON'T start onboarding automatically
+                // Onboarding only starts when user types /join command
+                await UpdateUserRolesAsync(user, removeOutsider: false, addOutsider: true);
+                _logger.LogInformation("[UserJoined] Added Outsider role to new user {Username}. Waiting for /join command.", user.Username);
             }
             catch (Exception ex)
             {
@@ -197,21 +199,45 @@ namespace Onboarding_bot.Services
             {
                 var storyChannelIdStr = Environment.GetEnvironmentVariable("DISCORD_STORY_CHANNEL_ID");
                 if (string.IsNullOrEmpty(storyChannelIdStr) || !ulong.TryParse(storyChannelIdStr, out var storyChannelId))
+                {
+                    _logger.LogWarning("[CheckStory] Story channel ID not found in environment variables");
                     return false;
+                }
 
                 var storyChannel = _client.GetChannel(storyChannelId) as IMessageChannel;
                 
-                if (storyChannel == null) return false;
+                if (storyChannel == null)
+                {
+                    _logger.LogWarning("[CheckStory] Story channel not found: {ChannelId}", storyChannelId);
+                    return false;
+                }
 
+                // Get recent messages and check for user mentions
                 var messages = await storyChannel.GetMessagesAsync(100).FlattenAsync();
-                var hasStory = messages.Any(m => m.MentionedUserIds.Contains(user.Id));
                 
-                _logger.LogInformation("[CheckStory] User {Username} has existing story: {HasStory}", user.Username, hasStory);
-                return hasStory;
+                foreach (var message in messages)
+                {
+                    // Check if user is mentioned in the message
+                    if (message.MentionedUserIds.Contains(user.Id))
+                    {
+                        _logger.LogInformation("[CheckStory] Found existing story for user {Username} in message {MessageId}", user.Username, message.Id);
+                        return true;
+                    }
+                    
+                    // Also check if the message content contains the user's name or username
+                    if (message.Content.Contains(user.Username) || message.Content.Contains(user.Nickname ?? ""))
+                    {
+                        _logger.LogInformation("[CheckStory] Found existing story for user {Username} by name match in message {MessageId}", user.Username, message.Id);
+                        return true;
+                    }
+                }
+                
+                _logger.LogInformation("[CheckStory] No existing story found for user {Username} in story channel", user.Username);
+                return false;
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "[Error] Failed to check existing story");
+                _logger.LogError(ex, "[Error] Failed to check existing story for user {Username}", user.Username);
                 return false;
             }
         }
@@ -262,19 +288,30 @@ namespace Onboarding_bot.Services
             }
         }
 
-        public async Task UpdateUserRolesAsync(SocketGuildUser user, bool removeOutsider = false, bool addAssociate = false)
+        public async Task UpdateUserRolesAsync(SocketGuildUser user, bool removeOutsider = false, bool addAssociate = false, bool addOutsider = false)
         {
             try
             {
                 var outsiderRoleIdStr = Environment.GetEnvironmentVariable("DISCORD_OUTSIDER_ROLE_ID");
                 var associateRoleIdStr = Environment.GetEnvironmentVariable("DISCORD_ASSOCIATE_ROLE_ID");
 
-                if (removeOutsider && !string.IsNullOrEmpty(outsiderRoleIdStr) && ulong.TryParse(outsiderRoleIdStr, out var outsiderRoleId))
+                if (addOutsider && !string.IsNullOrEmpty(outsiderRoleIdStr) && ulong.TryParse(outsiderRoleIdStr, out var outsiderRoleId))
                 {
                     var outsiderRole = user.Guild.GetRole(outsiderRoleId);
+                    if (outsiderRole != null && !user.Roles.Contains(outsiderRole))
+                    {
+                        await user.AddRoleAsync(outsiderRole);
+                        _logger.LogInformation("[Roles] Added Outsider role to user {Username}", user.Username);
+                    }
+                }
+
+                if (removeOutsider && !string.IsNullOrEmpty(outsiderRoleIdStr) && ulong.TryParse(outsiderRoleIdStr, out var outsiderRoleIdToRemove))
+                {
+                    var outsiderRole = user.Guild.GetRole(outsiderRoleIdToRemove);
                     if (outsiderRole != null && user.Roles.Contains(outsiderRole))
                     {
                         await user.RemoveRoleAsync(outsiderRole);
+                        _logger.LogInformation("[Roles] Removed Outsider role from user {Username}", user.Username);
                     }
                 }
 
@@ -284,6 +321,7 @@ namespace Onboarding_bot.Services
                     if (associateRole != null && !user.Roles.Contains(associateRole))
                     {
                         await user.AddRoleAsync(associateRole);
+                        _logger.LogInformation("[Roles] Added Associate role to user {Username}", user.Username);
                     }
                 }
             }
@@ -371,7 +409,7 @@ namespace Onboarding_bot.Services
         {
             try
             {
-                _logger.LogInformation("[NewUser] Starting onboarding for {Username}", user.Username);
+                _logger.LogInformation("[NewUser] Starting onboarding for user {Username}", user.Username);
 
                 // Get current invite uses to compare
                 var currentInvites = await user.Guild.GetInvitesAsync();
@@ -396,7 +434,7 @@ namespace Onboarding_bot.Services
                 // Save story
                 _onboardingHandler.SaveStory(user.Id, story);
 
-                // Send story to channel
+                // Send story to channel - pass this DiscordBotService instance
                 await _onboardingHandler.SendStoryToChannelAsync(user, story, hasInvite, this);
 
                 // Update user roles

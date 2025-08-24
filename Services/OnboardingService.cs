@@ -140,9 +140,9 @@ namespace Onboarding_bot.Services
             }
             finally
             {
-                // Close thread after a delay
-                await Task.Delay(5000);
-                await thread.DeleteAsync();
+                // Don't delete the thread automatically - let the user leave it manually
+                // This prevents the "gateway task blocking" issue
+                _logger.LogInformation("[Onboarding] Onboarding completed for user {Username}. Thread will remain open.", user.Username);
             }
         }
 
@@ -195,33 +195,42 @@ namespace Onboarding_bot.Services
         {
             var tcs = new TaskCompletionSource<string>();
             var userId = thread.OwnerId;
+            var timeoutTask = Task.Delay(timeoutSeconds * 1000);
 
+            // Create a local handler that only responds to messages in this specific thread
             Task Handler(SocketMessage msg)
             {
                 if (msg.Channel.Id == thread.Id && msg.Author.Id == userId && !msg.Author.IsBot)
                 {
+                    _logger.LogInformation("[Response] User {Username} responded: {Response}", msg.Author.Username, msg.Content);
                     tcs.TrySetResult(msg.Content);
                 }
                 return Task.CompletedTask;
             }
 
+            // Add the handler
             _client.MessageReceived += Handler;
 
             try
             {
-                var resultTask = tcs.Task;
-                if (await Task.WhenAny(resultTask, Task.Delay(timeoutSeconds * 1000)) == resultTask)
+                // Wait for either the user response or timeout
+                var completedTask = await Task.WhenAny(tcs.Task, timeoutTask);
+                
+                if (completedTask == tcs.Task)
                 {
-                    return resultTask.Result;
+                    var response = await tcs.Task;
+                    _logger.LogInformation("[Response] Successfully received response from user {Username}: {Response}", userId, response);
+                    return response;
                 }
                 else
                 {
-                    _logger.LogWarning("[Timeout] User did not respond in time.");
+                    _logger.LogWarning("[Timeout] User {UserId} did not respond in time.", userId);
                     return "لم يتم الرد في الوقت المحدد";
                 }
             }
             finally
             {
+                // Always remove the handler to prevent memory leaks
                 _client.MessageReceived -= Handler;
             }
         }
