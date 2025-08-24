@@ -81,10 +81,9 @@ namespace Onboarding_bot.Handlers
             _storyService.SaveStory(userId, story);
         }
 
-        public async Task SendStoryToChannelAsync(SocketGuildUser user, string story, bool hasInvite)
+        public async Task SendStoryToChannelAsync(SocketGuildUser user, string story, bool hasInvite, DiscordBotService discordService)
         {
-            // This will be handled by the calling service
-            _logger.LogInformation("[Story] Story ready for user {Username}", user.Username);
+            await _storyService.SendStoryToChannelAsync(user, story, hasInvite, discordService);
         }
     }
 }

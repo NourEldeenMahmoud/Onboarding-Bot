@@ -16,8 +16,15 @@ builder.Services.AddEndpointsApiExplorer();
 // Add Logging
 builder.Services.AddLogging();
 
-// Add Discord Socket Client first
-builder.Services.AddSingleton<DiscordSocketClient>();
+// Add Discord Socket Client first with proper configuration
+builder.Services.AddSingleton<DiscordSocketClient>(provider =>
+{
+    return new DiscordSocketClient(new DiscordSocketConfig
+    {
+        GatewayIntents = GatewayIntents.All,
+        LogLevel = LogSeverity.Info
+    });
+});
 
 // Add Discord Bot Service
 builder.Services.AddSingleton<OnboardingService>();

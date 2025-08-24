@@ -20,8 +20,6 @@ namespace Onboarding_bot.Services
             _logger = logger;
             _onboardingHandler = onboardingHandler;
             _client = client;
-
-            SetupEventHandlers();
         }
 
         private void SetupEventHandlers()
@@ -151,7 +149,7 @@ namespace Onboarding_bot.Services
                 if (message.Author.IsBot) return;
 
                 // Handle !join command
-                if (message.Content.StartsWith("/join"))
+                if (message.Content.StartsWith("!join"))
                 {
                     var user = message.Author as SocketGuildUser;
                     if (user != null)
@@ -294,7 +292,7 @@ namespace Onboarding_bot.Services
                 _onboardingHandler.SaveStory(user.Id, story);
 
                 // Send story to channel
-                await _onboardingHandler.SendStoryToChannelAsync(user, story, hasInvite);
+                await _onboardingHandler.SendStoryToChannelAsync(user, story, hasInvite, this);
 
                 // Update user roles
                 await UpdateUserRolesAsync(user, removeOutsider: true, addAssociate: true);
