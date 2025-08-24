@@ -540,9 +540,9 @@ namespace Onboarding_bot.Services
                         _logger.LogInformation("[Roles] Added Associate role to user {Username}", user.Username);
                         
                         // AUTOMATIC: Remove Outsider role when Associate role is added
-                        if (!string.IsNullOrEmpty(outsiderRoleIdStr) && ulong.TryParse(outsiderRoleIdStr, out var outsiderRoleId))
+                        if (!string.IsNullOrEmpty(outsiderRoleIdStr) && ulong.TryParse(outsiderRoleIdStr, out var autoOutsiderRoleId))
                         {
-                            var outsiderRole = user.Guild.GetRole(outsiderRoleId);
+                            var outsiderRole = user.Guild.GetRole(autoOutsiderRoleId);
                             if (outsiderRole != null && user.Roles.Contains(outsiderRole))
                             {
                                 await user.RemoveRoleAsync(outsiderRole);
