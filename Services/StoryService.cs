@@ -102,7 +102,7 @@ Hidden Docks، Tech Lab، Abandoned Warehouse، والمزيد.
                     return $"حصلت مشكلة أثناء توليد القصة (OpenAI). كود: {(int)response.StatusCode}";
                 }
 
-                var json = JObject.Parse(response.Content);
+                var json = JObject.Parse(response.Content ?? "{}");
                 var content = json["choices"]?[0]?["message"]?["content"]?.ToString()
                     ?? json["choices"]?[0]?["text"]?.ToString();
 
@@ -157,7 +157,7 @@ Hidden Docks، Tech Lab، Abandoned Warehouse، والمزيد.
                     .WithTitle($"🎭 {user.Username} - قصة جديدة!")
                     .WithDescription(story)
                     .WithColor(hasInvite ? Color.Green : Color.Orange)
-                    .WithThumbnailUrl(user.GetAvatarUrl())
+                    .WithThumbnailUrl(user.GetAvatarUrl() ?? "")
                     .WithTimestamp(DateTimeOffset.UtcNow)
                     .WithFooter(footer => footer.Text = hasInvite ? "🟢 عضو بإنفايت" : "🟠 عضو بدون إنفايت")
                     .Build();
@@ -176,7 +176,7 @@ Hidden Docks، Tech Lab، Abandoned Warehouse، والمزيد.
             try
             {
                 var stories = File.Exists(StoriesFile)
-                    ? JsonConvert.DeserializeObject<Dictionary<ulong, string>>(File.ReadAllText(StoriesFile))
+                    ? JsonConvert.DeserializeObject<Dictionary<ulong, string>>(File.ReadAllText(StoriesFile)) ?? new Dictionary<ulong, string>()
                     : new Dictionary<ulong, string>();
 
                 stories[userId] = story;
@@ -194,7 +194,7 @@ Hidden Docks، Tech Lab، Abandoned Warehouse، والمزيد.
             try
             {
                 if (!File.Exists(StoriesFile)) return "";
-                var stories = JsonConvert.DeserializeObject<Dictionary<ulong, string>>(File.ReadAllText(StoriesFile));
+                var stories = JsonConvert.DeserializeObject<Dictionary<ulong, string>>(File.ReadAllText(StoriesFile)) ?? new Dictionary<ulong, string>();
                 return stories.ContainsKey(userId) ? stories[userId] : "";
             }
             catch (Exception ex)

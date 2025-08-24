@@ -45,7 +45,7 @@ namespace Onboarding_bot.Services
                 }
 
                 // Find the invite that was used by this user
-                RestInviteMetadata usedInvite = null;
+                RestInviteMetadata? usedInvite = null;
                 foreach (var invite in invitesAfter)
                 {
                     var previousUses = inviteUses.ContainsKey(invite.Code) ? inviteUses[invite.Code] : 0;
@@ -69,20 +69,21 @@ namespace Onboarding_bot.Services
 
                 string inviterName = usedInvite?.Inviter?.Username ?? "غير معروف";
                 ulong inviterId = usedInvite?.Inviter?.Id ?? 0;
-                string inviterRole = "";
-                string inviterStory = "";
+                string inviterRole = string.Empty;
+                string inviterStory = string.Empty;
 
                 if (inviterId != 0)
                 {
                     var inviterUser = guild.GetUser(inviterId);
                     if (inviterUser != null)
                     {
-                        inviterRole = inviterUser.Roles
+                        var topRole = inviterUser.Roles
                             .Where(r => r.Id != guild.EveryoneRole.Id)
                             .OrderByDescending(r => r.Position)
-                            .FirstOrDefault()?.Name ?? "بدون رول";
+                            .FirstOrDefault();
+                        inviterRole = topRole?.Name ?? "بدون رول";
 
-                        inviterStory = _storyService.LoadStory(inviterId);
+                        inviterStory = _storyService.LoadStory(inviterId) ?? string.Empty;
                         
                         _logger.LogInformation("[Inviter] Inviter details: {InviterName} ({InviterId}), Role: {Role}, HasStory: {HasStory}", 
                             inviterName, inviterId, inviterRole, !string.IsNullOrEmpty(inviterStory));
@@ -119,13 +120,13 @@ namespace Onboarding_bot.Services
                 await thread.SendMessageAsync(embed: welcomeEmbed);
 
                 // Ask questions
-                responses["name"] = await AskQuestionAsync(thread, "اسمك الحقيقي ايه؟");
-                responses["age"] = await AskQuestionAsync(thread, "سنك كام؟");
-                responses["interest"] = await AskQuestionAsync(thread, "داخل السرفر ليه؟");
-                responses["specialty"] = await AskQuestionAsync(thread, "تخصصك أو شغفك؟");
-                responses["strength"] = await AskQuestionAsync(thread, "أهم ميزة عندك؟");
-                responses["weakness"] = await AskQuestionAsync(thread, "أكبر عيب عندك؟");
-                responses["favoritePlace"] = await AskQuestionAsync(thread, "مكان بتحبه تروح له؟");
+                responses["name"] = await AskQuestionAsync(thread, user, "اسمك الحقيقي ايه؟");
+                responses["age"] = await AskQuestionAsync(thread, user, "سنك كام؟");
+                responses["interest"] = await AskQuestionAsync(thread, user, "داخل السرفر ليه؟");
+                responses["specialty"] = await AskQuestionAsync(thread, user, "تخصصك أو شغفك؟");
+                responses["strength"] = await AskQuestionAsync(thread, user, "أهم ميزة عندك؟");
+                responses["weakness"] = await AskQuestionAsync(thread, user, "أكبر عيب عندك؟");
+                responses["favoritePlace"] = await AskQuestionAsync(thread, user, "مكان بتحبه تروح له؟");
 
                 // Send completion message with story channel link
                 var storyChannelIdStr = Environment.GetEnvironmentVariable("DISCORD_STORY_CHANNEL_ID");
@@ -192,7 +193,7 @@ namespace Onboarding_bot.Services
             }
         }
 
-        private async Task<string> AskQuestionAsync(IThreadChannel thread, string question)
+        private async Task<string> AskQuestionAsync(IThreadChannel thread, SocketGuildUser user, string question)
         {
             var questionEmbed = new EmbedBuilder()
                 .WithTitle("❓ سؤال")
@@ -202,16 +203,16 @@ namespace Onboarding_bot.Services
                 .Build();
 
             await thread.SendMessageAsync(embed: questionEmbed);
-            return await WaitForUserResponseAsync(thread);
+            return await WaitForUserResponseAsync(thread, user);
         }
 
-        private async Task<string> WaitForUserResponseAsync(IThreadChannel thread, int timeoutSeconds = 60)
+        private async Task<string> WaitForUserResponseAsync(IThreadChannel thread, SocketGuildUser user, int timeoutSeconds = 180)
         {
-            var userId = thread.OwnerId;
+            var userId = user.Id; // Use the actual user ID, not thread owner
             var startTime = DateTime.UtcNow;
             var timeout = TimeSpan.FromSeconds(timeoutSeconds);
             
-            _logger.LogInformation("[Response] Waiting for response from user {UserId} in thread {ThreadId}", userId, thread.Id);
+            _logger.LogInformation("[Response] Waiting for response from user {Username} ({UserId}) in thread {ThreadId}", user.Username, userId, thread.Id);
 
             while (DateTime.UtcNow - startTime < timeout)
             {
@@ -249,7 +250,7 @@ namespace Onboarding_bot.Services
                 }
             }
 
-            _logger.LogWarning("[Response] Timeout waiting for response from user {UserId}", userId);
+            _logger.LogWarning("[Response] Timeout waiting for response from user {Username} ({UserId})", user.Username, userId);
             return "لم يتم الرد في الوقت المحدد";
         }
 

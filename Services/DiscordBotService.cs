@@ -82,7 +82,7 @@ namespace Onboarding_bot.Services
             await RegisterCommandsAsync();
         }
 
-                private async Task RegisterCommandsAsync()
+        private async Task RegisterCommandsAsync()
         {
             try
             {
@@ -252,7 +252,7 @@ namespace Onboarding_bot.Services
             }
         }
 
-        private async Task HandleExistingUserAsync(SocketGuildUser user, ISocketMessageChannel channel = null)
+        private async Task HandleExistingUserAsync(SocketGuildUser user, ISocketMessageChannel? channel = null)
         {
             try
             {
@@ -263,11 +263,11 @@ namespace Onboarding_bot.Services
                 if (channel != null)
                 {
                     var embed = new EmbedBuilder()
-                        .WithTitle("🎭 محاولة انضمام فاشلة!")
-                        .WithDescription($"**{user.Username}**، انت بتحاول تعمل onboarding...\n\n❌ **وانته قديم!** كنت موجود قبل كده. تم تحديث وضعك.")
-                        .WithColor(Color.Orange)
-                        .WithTimestamp(DateTimeOffset.UtcNow)
-                        .Build();
+                    .WithTitle("🎭 مرحباً بعودتك!")
+                    .WithDescription("انته قديم… كنت موجود قبل كده. تم تحديث وضعك.")
+                    .WithColor(Color.Green)
+                    .WithTimestamp(DateTimeOffset.UtcNow)
+                    .Build();
 
                     await channel.SendMessageAsync(embed: embed);
                 }
@@ -283,7 +283,7 @@ namespace Onboarding_bot.Services
                             .WithTitle("🎭 عضو قديم عاد!")
                             .WithDescription($"**{user.Username}** عضو قديم ورجع للعائلة! 🎉")
                             .WithColor(Color.Green)
-                            .WithThumbnailUrl(user.GetAvatarUrl())
+                            .WithThumbnailUrl(user.GetAvatarUrl() ?? "")
                             .WithTimestamp(DateTimeOffset.UtcNow)
                             .WithFooter(footer => footer.Text = "🟢 عضو قديم")
                             .Build();
