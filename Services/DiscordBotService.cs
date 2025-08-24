@@ -538,6 +538,34 @@ namespace Onboarding_bot.Services
                     {
                         await user.AddRoleAsync(associateRole);
                         _logger.LogInformation("[Roles] Added Associate role to user {Username}", user.Username);
+                        
+                        // AUTOMATIC: Remove Outsider role when Associate role is added
+                        if (!string.IsNullOrEmpty(outsiderRoleIdStr) && ulong.TryParse(outsiderRoleIdStr, out var outsiderRoleId))
+                        {
+                            var outsiderRole = user.Guild.GetRole(outsiderRoleId);
+                            if (outsiderRole != null && user.Roles.Contains(outsiderRole))
+                            {
+                                await user.RemoveRoleAsync(outsiderRole);
+                                _logger.LogInformation("[Roles] Automatically removed Outsider role from user {Username} after adding Associate role", user.Username);
+                            }
+                        }
+                    }
+                }
+                
+                // FINAL CHECK: Ensure no user has both Outsider and Associate roles
+                // This is a safety measure to maintain role consistency
+                if (!string.IsNullOrEmpty(outsiderRoleIdStr) && !string.IsNullOrEmpty(associateRoleIdStr) && 
+                    ulong.TryParse(outsiderRoleIdStr, out var finalOutsiderRoleId) && 
+                    ulong.TryParse(associateRoleIdStr, out var finalAssociateRoleId))
+                {
+                    var outsiderRole = user.Guild.GetRole(finalOutsiderRoleId);
+                    var associateRole = user.Guild.GetRole(finalAssociateRoleId);
+                    
+                    if (outsiderRole != null && associateRole != null && 
+                        user.Roles.Contains(associateRole) && user.Roles.Contains(outsiderRole))
+                    {
+                        await user.RemoveRoleAsync(outsiderRole);
+                        _logger.LogInformation("[Roles] Safety check: Removed conflicting Outsider role from user {Username} who has Associate role", user.Username);
                     }
                 }
             }
@@ -572,6 +600,7 @@ namespace Onboarding_bot.Services
                 if (!string.IsNullOrEmpty(associateRoleIdStr) && ulong.TryParse(associateRoleIdStr, out var associateRoleId))
                 {
                     var associateRole = user.Guild.GetRole(associateRoleId);
+                    
                     if (associateRole != null && user.Roles.Contains(associateRole))
                     {
                         await channel.SendMessageAsync("أنت بالفعل عضو في العائلة!");
@@ -751,6 +780,37 @@ namespace Onboarding_bot.Services
                         await interaction.RespondAsync("حدث خطأ أثناء تنفيذ الأمر.", ephemeral: true);
                 }
                 catch { }
+            }
+        }
+
+        // HELPER: Ensure role consistency - Associate users should never have Outsider role
+        public async Task EnsureRoleConsistencyAsync(SocketGuildUser user)
+        {
+            try
+            {
+                var outsiderRoleIdStr = Environment.GetEnvironmentVariable("DISCORD_OUTSIDER_ROLE_ID");
+                var associateRoleIdStr = Environment.GetEnvironmentVariable("DISCORD_ASSOCIATE_ROLE_ID");
+                
+                if (string.IsNullOrEmpty(outsiderRoleIdStr) || string.IsNullOrEmpty(associateRoleIdStr) ||
+                    !ulong.TryParse(outsiderRoleIdStr, out var outsiderRoleId) || 
+                    !ulong.TryParse(associateRoleIdStr, out var associateRoleId))
+                {
+                    return;
+                }
+                
+                var outsiderRole = user.Guild.GetRole(outsiderRoleId);
+                var associateRole = user.Guild.GetRole(associateRoleId);
+                
+                if (outsiderRole != null && associateRole != null && 
+                    user.Roles.Contains(associateRole) && user.Roles.Contains(outsiderRole))
+                {
+                    await user.RemoveRoleAsync(outsiderRole);
+                    _logger.LogInformation("[RoleConsistency] Removed conflicting Outsider role from user {Username} who has Associate role", user.Username);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "[Error] Failed to ensure role consistency for user {Username}", user.Username);
             }
         }
 
