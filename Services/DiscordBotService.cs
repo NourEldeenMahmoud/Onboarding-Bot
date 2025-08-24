@@ -28,6 +28,7 @@ namespace Onboarding_bot.Services
             _client.Ready += ReadyAsync;
             _client.UserJoined += HandleUserJoinedAsync;
             _client.MessageReceived += HandleMessageReceivedAsync;
+            _client.Disconnected += DisconnectedAsync;
         }
 
         public async Task StartAsync()
@@ -40,8 +41,41 @@ namespace Onboarding_bot.Services
             }
 
             SetupEventHandlers();
-            await _client.LoginAsync(TokenType.Bot, token);
-            await _client.StartAsync();
+            
+            // Add retry logic for rate limiting
+            int maxRetries = 5;
+            int retryCount = 0;
+            
+            while (retryCount < maxRetries)
+            {
+                try
+                {
+                    _logger.LogInformation("[Startup] Attempting to connect to Discord (attempt {Attempt}/{MaxAttempts})", retryCount + 1, maxRetries);
+                    
+                    await _client.LoginAsync(TokenType.Bot, token);
+                    await _client.StartAsync();
+                    
+                    _logger.LogInformation("[Startup] Successfully connected to Discord");
+                    break;
+                }
+                catch (Exception ex)
+                {
+                    retryCount++;
+                    _logger.LogWarning(ex, "[Startup] Failed to connect to Discord (attempt {Attempt}/{MaxAttempts})", retryCount, maxRetries);
+                    
+                    if (retryCount < maxRetries)
+                    {
+                        int delaySeconds = Math.Min(30 * retryCount, 120); // Exponential backoff with max 2 minutes
+                        _logger.LogInformation("[Startup] Waiting {Delay} seconds before retry...", delaySeconds);
+                        await Task.Delay(delaySeconds * 1000);
+                    }
+                    else
+                    {
+                        _logger.LogError(ex, "[Startup] Failed to connect to Discord after {MaxAttempts} attempts", maxRetries);
+                        throw;
+                    }
+                }
+            }
 
             // Register slash commands
             await RegisterCommandsAsync();
@@ -51,6 +85,25 @@ namespace Onboarding_bot.Services
         {
             // No commands to register
             _logger.LogInformation("Bot ready");
+        }
+
+        private async Task DisconnectedAsync(Exception exception)
+        {
+            _logger.LogWarning(exception, "[Disconnected] Bot disconnected from Discord");
+            
+            // Wait a bit before attempting to reconnect
+            await Task.Delay(5000);
+            
+            try
+            {
+                _logger.LogInformation("[Reconnection] Attempting to reconnect to Discord...");
+                await _client.StartAsync();
+                _logger.LogInformation("[Reconnection] Successfully reconnected to Discord");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "[Reconnection] Failed to reconnect to Discord");
+            }
         }
 
         private Task LogAsync(LogMessage log)
@@ -148,8 +201,8 @@ namespace Onboarding_bot.Services
             {
                 if (message.Author.IsBot) return;
 
-                // Handle !join command
-                if (message.Content.StartsWith("!join"))
+                // Handle /join command
+                if (message.Content.StartsWith("/join"))
                 {
                     var user = message.Author as SocketGuildUser;
                     if (user != null)

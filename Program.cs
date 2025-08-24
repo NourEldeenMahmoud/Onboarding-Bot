@@ -49,6 +49,9 @@ app.UseHttpsRedirection();
 app.UseAuthorization();
 app.MapControllers();
 
+// Add root endpoint
+app.MapGet("/", () => "Onboarding Bot is running! Use /health to check status.");
+
 // Start Discord Bot
 var client = app.Services.GetRequiredService<DiscordSocketClient>();
 var discordService = app.Services.GetRequiredService<DiscordBotService>();
