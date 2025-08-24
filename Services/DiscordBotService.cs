@@ -310,19 +310,56 @@ namespace Onboarding_bot.Services
                     return false;
                 }
 
-                // OPTIMIZATION: Check only last 50 messages instead of 200 for better performance
-                var messages = await storyChannel.GetMessagesAsync(50).FlattenAsync();
+                // IMPROVED: Check more messages and use better search strategy
+                var messages = await storyChannel.GetMessagesAsync(200).FlattenAsync();
                 _logger.LogInformation("[CheckStory] Checking {MessageCount} messages in story channel for user {Username}", messages.Count(), user.Username);
                 
-                // OPTIMIZATION: Use LINQ for better performance
+                // IMPROVED: Better search strategy
                 var hasExistingStory = messages.Any(message => 
                 {
-                    // Check if user is mentioned in the message
+                    // Check if user is mentioned in the message (most reliable)
                     if (message.MentionedUserIds.Contains(user.Id))
                     {
                         _logger.LogInformation("[CheckStory] Found existing story for user {Username} by mention in message {MessageId}", 
                             user.Username, message.Id);
                         return true;
+                    }
+                    
+                    // Check if the message is an embed and contains user info
+                    if (message.Embeds.Count > 0)
+                    {
+                        foreach (var embed in message.Embeds)
+                        {
+                            // Check embed title
+                            if (!string.IsNullOrEmpty(embed.Title) && 
+                                (embed.Title.Contains(user.Username) || 
+                                 (user.Nickname != null && embed.Title.Contains(user.Nickname))))
+                            {
+                                _logger.LogInformation("[CheckStory] Found existing story for user {Username} by embed title in message {MessageId}", 
+                                    user.Username, message.Id);
+                                return true;
+                            }
+                            
+                            // Check embed description
+                            if (!string.IsNullOrEmpty(embed.Description) && 
+                                (embed.Description.Contains(user.Username) || 
+                                 (user.Nickname != null && embed.Description.Contains(user.Nickname))))
+                            {
+                                _logger.LogInformation("[CheckStory] Found existing story for user {Username} by embed description in message {MessageId}", 
+                                    user.Username, message.Id);
+                                return true;
+                            }
+                            
+                            // Check embed footer
+                            if (embed.Footer.HasValue && !string.IsNullOrEmpty(embed.Footer.Value.Text) && 
+                                (embed.Footer.Value.Text.Contains(user.Username) || 
+                                 (user.Nickname != null && embed.Footer.Value.Text.Contains(user.Nickname))))
+                            {
+                                _logger.LogInformation("[CheckStory] Found existing story for user {Username} by embed footer in message {MessageId}", 
+                                    user.Username, message.Id);
+                                return true;
+                            }
+                        }
                     }
                     
                     // Check if the message content contains the user's name or username
@@ -349,7 +386,23 @@ namespace Onboarding_bot.Services
                     return true;
                 }
                 
-                _logger.LogInformation("[CheckStory] No existing story found for user {Username} in story channel. User is considered NEW.", user.Username);
+                // FALLBACK: Check if user has a story saved in JSON file
+                try
+                {
+                    var storyService = _onboardingHandler.GetStoryService();
+                    var savedStory = storyService.LoadStory(user.Id);
+                    if (!string.IsNullOrEmpty(savedStory))
+                    {
+                        _logger.LogInformation("[CheckStory] Found existing story for user {Username} in JSON file - considered OLD member", user.Username);
+                        return true;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "[CheckStory] Failed to check JSON file for user {Username}", user.Username);
+                }
+                
+                _logger.LogInformation("[CheckStory] No existing story found for user {Username} in story channel or JSON file. User is considered NEW.", user.Username);
                 return false;
             }
             catch (Exception ex)
