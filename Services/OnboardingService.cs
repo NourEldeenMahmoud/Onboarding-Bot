@@ -214,6 +214,9 @@ namespace Onboarding_bot.Services
             
             _logger.LogInformation("[Response] Waiting for response from user {Username} ({UserId}) in thread {ThreadId}", user.Username, userId, thread.Id);
 
+            // Get the timestamp when we started waiting (after sending the question)
+            var questionSentTime = DateTime.UtcNow;
+
             while (DateTime.UtcNow - startTime < timeout)
             {
                 try
@@ -221,23 +224,17 @@ namespace Onboarding_bot.Services
                     // Get recent messages in the thread
                     var messages = await thread.GetMessagesAsync(10).FlattenAsync();
                     
-                    // Look for the most recent message from the user
+                    // Look for the most recent message from the user that came AFTER we sent the question
                     var userMessage = messages
-                        .Where(m => m.Author.Id == userId && !m.Author.IsBot)
+                        .Where(m => m.Author.Id == userId && !m.Author.IsBot && m.Timestamp > questionSentTime)
                         .OrderByDescending(m => m.Timestamp)
                         .FirstOrDefault();
 
                     if (userMessage != null)
                     {
-                        var messageAge = DateTime.UtcNow - userMessage.Timestamp.DateTime;
-                        
-                        // Only accept messages that are recent (within the last 5 seconds)
-                        if (messageAge.TotalSeconds <= 5)
-                        {
-                            _logger.LogInformation("[Response] Found recent response from user {Username}: {Response}", 
-                                userMessage.Author.Username, userMessage.Content);
-                            return userMessage.Content;
-                        }
+                        _logger.LogInformation("[Response] Found response from user {Username} after question: {Response}", 
+                            userMessage.Author.Username, userMessage.Content);
+                        return userMessage.Content;
                     }
 
                     // Wait a bit before checking again
