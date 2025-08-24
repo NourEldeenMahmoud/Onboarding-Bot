@@ -187,67 +187,51 @@ namespace Onboarding_bot.Services
             return Task.CompletedTask;
         }
 
-        private Task GuildAvailableAsync(SocketGuild guild)
+        private async Task GuildAvailableAsync(SocketGuild guild)
         {
             _logger.LogInformation("[GuildAvailable] Guild {GuildName} ({GuildId}) is now available. Tracking invites...", guild.Name, guild.Id);
-            _ = Task.Run(async () =>
+            
+            try
             {
-                try
-                {
-                    var invites = await guild.GetInvitesAsync();
-                    _logger.LogInformation("[GuildAvailable] Found {InviteCount} invites in guild {GuildName}", invites.Count, guild.Name);
-                    
-                    // Cache the invites for this guild
-                    _inviteCache[guild.Id] = invites.ToList();
-                    _logger.LogInformation("[GuildAvailable] Invite cache initialized for guild {GuildName}", guild.Name);
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogWarning(ex, "[GuildAvailable] Failed to get invites for guild {GuildName}", guild.Name);
-                }
-            });
-            return Task.CompletedTask;
+                var invites = await guild.GetInvitesAsync();
+                _logger.LogInformation("[GuildAvailable] Found {InviteCount} invites in guild {GuildName}", invites.Count, guild.Name);
+                
+                // Cache the invites for this guild
+                _inviteCache[guild.Id] = invites.ToList();
+                _logger.LogInformation("[GuildAvailable] Invite cache initialized for guild {GuildName}", guild.Name);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "[GuildAvailable] Failed to get invites for guild {GuildName}", guild.Name);
+            }
         }
 
-        private Task HandleUserJoinedAsync(SocketGuildUser user)
+        private async Task HandleUserJoinedAsync(SocketGuildUser user)
         {
             try
             {
                 _logger.LogInformation("[UserJoined] {Username} joined.", user.Username);
 
-                // Handle user joined in background to prevent blocking
-                _ = Task.Run(async () =>
+                // Track invite usage immediately when user joins
+                await TrackInviteUsageAsync(user);
+                
+                // Check if user has existing story in story channel
+                var hasExistingStory = await CheckExistingStoryAsync(user);
+                if (hasExistingStory)
                 {
-                    try
-                    {
-                        // IMPROVED: Track invite usage immediately when user joins
-                        await TrackInviteUsageAsync(user);
-                        
-                        // Check if user has existing story in story channel
-                        var hasExistingStory = await CheckExistingStoryAsync(user);
-                        if (hasExistingStory)
-                        {
-                            await HandleExistingUserAsync(user);
-                            return;
-                        }
+                    await HandleExistingUserAsync(user);
+                    return;
+                }
 
-                        // For new users, just add Outsider role - DON'T start onboarding automatically
-                        // Onboarding only starts when user types /join command
-                        await UpdateUserRolesAsync(user, removeOutsider: false, addOutsider: true);
-                        _logger.LogInformation("[UserJoined] Added Outsider role to new user {Username}. Waiting for /join command.", user.Username);
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.LogError(ex, "[Error] Exception in HandleUserJoinedAsync background task for {Username}", user.Username);
-                    }
-                });
+                // For new users, just add Outsider role - DON'T start onboarding automatically
+                // Onboarding only starts when user types /join command
+                await UpdateUserRolesAsync(user, removeOutsider: false, addOutsider: true);
+                _logger.LogInformation("[UserJoined] Added Outsider role to new user {Username}. Waiting for /join command.", user.Username);
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "[Error] Exception in HandleUserJoinedAsync for {Username}", user.Username);
             }
-            
-            return Task.CompletedTask;
         }
 
         // NEW: Improved invite tracking method
@@ -271,15 +255,26 @@ namespace Onboarding_bot.Services
 
                 // Find the invite that was used by this user
                 var usedInvite = newInvites.FirstOrDefault(inv => 
-                    oldInvites.Any(old => old.Code == inv.Code && old.Uses < inv.Uses));
+                {
+                    var oldInvite = oldInvites.FirstOrDefault(old => old.Code == inv.Code);
+                    if (oldInvite != null)
+                    {
+                        var oldUses = oldInvite.Uses ?? 0;
+                        var newUses = inv.Uses ?? 0;
+                        return newUses > oldUses;
+                    }
+                    return false;
+                });
 
                 if (usedInvite != null)
                 {
                     var inviterName = usedInvite.Inviter?.Username ?? "Unknown";
+                    var oldInvite = oldInvites.First(old => old.Code == usedInvite.Code);
+                    var oldUses = oldInvite.Uses ?? 0;
+                    var newUses = usedInvite.Uses ?? 0;
+                    
                     _logger.LogInformation("[InviteTracking] {Username} joined via invite {Code} from {InviterName} (Uses: {OldUses} → {NewUses})", 
-                        user.Username, usedInvite.Code, inviterName, 
-                        oldInvites.First(old => old.Code == usedInvite.Code).Uses, 
-                        usedInvite.Uses);
+                        user.Username, usedInvite.Code, inviterName, oldUses, newUses);
                 }
                 else
                 {
@@ -592,7 +587,7 @@ namespace Onboarding_bot.Services
         }
 
         // NEW: Get inviter info from cache instead of old dictionary
-        private async Task<(string inviterName, ulong inviterId, string inviterRole, string inviterStory)> GetInviterInfoFromCacheAsync(SocketGuildUser user)
+        public async Task<(string inviterName, ulong inviterId, string inviterRole, string inviterStory)> GetInviterInfoFromCacheAsync(SocketGuildUser user)
         {
             try
             {
@@ -609,7 +604,16 @@ namespace Onboarding_bot.Services
 
                 // Find the invite that was used by this user
                 var usedInvite = newInvites.FirstOrDefault(inv => 
-                    oldInvites.Any(old => old.Code == inv.Code && old.Uses < inv.Uses));
+                {
+                    var oldInvite = oldInvites.FirstOrDefault(old => old.Code == inv.Code);
+                    if (oldInvite != null)
+                    {
+                        var oldUses = oldInvite.Uses ?? 0;
+                        var newUses = inv.Uses ?? 0;
+                        return newUses > oldUses;
+                    }
+                    return false;
+                });
 
                 if (usedInvite == null)
                 {

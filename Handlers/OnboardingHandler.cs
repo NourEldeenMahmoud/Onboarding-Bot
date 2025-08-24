@@ -22,15 +22,15 @@ namespace Onboarding_bot.Handlers
             _storyService = storyService;
         }
 
-        public async Task HandleNewUserAsync(SocketGuildUser user, Dictionary<string, int> inviteUses, DiscordBotService discordService)
+        public async Task HandleNewUserAsync(SocketGuildUser user, DiscordBotService discordService)
         {
             try
             {
                 _logger.LogInformation("[Onboarding] Starting onboarding for user {Username}", user.Username);
 
-                // Get inviter information
+                // Get inviter information from DiscordBotService cache
                 var (inviterName, inviterId, inviterRole, inviterStory) = 
-                    await _onboardingService.GetInviterInfoAsync(user, inviteUses);
+                    await discordService.GetInviterInfoFromCacheAsync(user);
 
                 bool hasInvite = inviterId != 0 && inviterName != "غير معروف";
 
@@ -58,11 +58,7 @@ namespace Onboarding_bot.Handlers
             }
         }
 
-        public async Task<(string inviterName, ulong inviterId, string inviterRole, string inviterStory)> GetInviterInfoAsync(
-            SocketGuildUser user, Dictionary<string, int> inviteUses)
-        {
-            return await _onboardingService.GetInviterInfoAsync(user, inviteUses);
-        }
+
 
         public async Task<Dictionary<string, string>> ConductOnboardingAsync(SocketGuildUser user)
         {

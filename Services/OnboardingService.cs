@@ -24,88 +24,7 @@ namespace Onboarding_bot.Services
             _client = client;
         }
 
-        public async Task<(string inviterName, ulong inviterId, string inviterRole, string inviterStory)> GetInviterInfoAsync(
-            SocketGuildUser user, Dictionary<string, int> inviteUses)
-        {
-            try
-            {
-                var guild = user.Guild;
-                var invitesAfter = await guild.GetInvitesAsync();
 
-                _logger.LogInformation("[Inviter] Checking invites for user {Username}. Found {InviteCount} invites", user.Username, invitesAfter.Count);
-
-                // Log all current invite states and compare with previous
-                _logger.LogInformation("[Inviter] Current invite states vs previous tracking:");
-                foreach (var invite in invitesAfter)
-                {
-                    var previousUses = inviteUses.ContainsKey(invite.Code) ? inviteUses[invite.Code] : 0;
-                    var currentUses = invite.Uses ?? 0;
-                    var difference = currentUses - previousUses;
-                    
-                    _logger.LogInformation("[Inviter] Invite {Code}: Previous={Previous}, Current={Current}, Difference={Difference}, Inviter={InviterName}", 
-                        invite.Code, previousUses, currentUses, difference, invite.Inviter?.Username ?? "Unknown");
-                }
-
-                // Find the invite that was used by this user
-                RestInviteMetadata? usedInvite = null;
-                int maxDifference = 0;
-                
-                foreach (var invite in invitesAfter)
-                {
-                    var previousUses = inviteUses.ContainsKey(invite.Code) ? inviteUses[invite.Code] : 0;
-                    var currentUses = invite.Uses ?? 0;
-                    var difference = currentUses - previousUses;
-                    
-                    // Check if this invite was used (current > previous) and find the one with biggest increase
-                    if (difference > 0 && difference > maxDifference)
-                    {
-                        usedInvite = invite;
-                        maxDifference = difference;
-                        _logger.LogInformation("[Inviter] Found potential used invite: {Code} by {InviterName} (Uses increased from {Previous} to {Current}, difference: {Difference})", 
-                            invite.Code, invite.Inviter?.Username ?? "Unknown", previousUses, currentUses, difference);
-                    }
-                }
-
-                // Update invite uses for future tracking
-                foreach (var invite in invitesAfter)
-                {
-                    inviteUses[invite.Code] = invite.Uses ?? 0;
-                }
-
-                string inviterName = usedInvite?.Inviter?.Username ?? "غير معروف";
-                ulong inviterId = usedInvite?.Inviter?.Id ?? 0;
-                string inviterRole = string.Empty;
-                string inviterStory = string.Empty;
-
-                if (inviterId != 0)
-                {
-                    var inviterUser = guild.GetUser(inviterId);
-                    if (inviterUser != null)
-                    {
-                        var topRole = inviterUser.Roles
-                            .Where(r => r.Id != guild.EveryoneRole.Id)
-                            .OrderByDescending(r => r.Position)
-                            .FirstOrDefault();
-                        inviterRole = topRole?.Name ?? "بدون رول";
-
-                        inviterStory = _storyService.LoadStory(inviterId) ?? string.Empty;
-                        
-                        _logger.LogInformation("[Inviter] Inviter details: {InviterName} ({InviterId}), Role: {Role}, HasStory: {HasStory}", 
-                            inviterName, inviterId, inviterRole, !string.IsNullOrEmpty(inviterStory));
-                    }
-                }
-
-                _logger.LogInformation("[Inviter] Final result for {Username}: Inviter={InviterName} ({InviterId}), Role={Role}, UsedInvite={UsedInviteCode}", 
-                    user.Username, inviterName, inviterId, inviterRole, usedInvite?.Code ?? "None");
-
-                return (inviterName, inviterId, inviterRole, inviterStory);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "[Error] Failed to get inviter info for user {Username}", user.Username);
-                return ("غير معروف", 0, "بدون رول", "");
-            }
-        }
 
         public async Task<Dictionary<string, string>> ConductOnboardingAsync(SocketGuildUser user)
         {
@@ -253,10 +172,6 @@ namespace Onboarding_bot.Services
             return "لم يتم الرد في الوقت المحدد";
         }
 
-        public async Task<bool> HasInviteAsync(SocketGuildUser user, Dictionary<string, int> inviteUses)
-        {
-            var (inviterName, inviterId, _, _) = await GetInviterInfoAsync(user, inviteUses);
-            return inviterId != 0 && inviterName != "غير معروف";
-        }
+
     }
 }

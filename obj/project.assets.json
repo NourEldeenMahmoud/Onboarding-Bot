@@ -6954,11 +6954,11 @@
   "project": {
     "version": "1.0.0",
     "restore": {
-      "projectUniqueName": "E:\\Nour Eldeen\\Study\\Self Study\\Onboarding bot\\Onboardingbot.csproj",
+      "projectUniqueName": "E:\\Nour Eldeen\\Study\\Self Study\\GitHub\\Onboarding bot\\Onboardingbot.csproj",
       "projectName": "Onboardingbot",
-      "projectPath": "E:\\Nour Eldeen\\Study\\Self Study\\Onboarding bot\\Onboardingbot.csproj",
+      "projectPath": "E:\\Nour Eldeen\\Study\\Self Study\\GitHub\\Onboarding bot\\Onboardingbot.csproj",
       "packagesPath": "C:\\Users\\NourEldeen\\.nuget\\packages\\",
-      "outputPath": "E:\\Nour Eldeen\\Study\\Self Study\\Onboarding bot\\obj\\",
+      "outputPath": "E:\\Nour Eldeen\\Study\\Self Study\\GitHub\\Onboarding bot\\obj\\",
       "projectStyle": "PackageReference",
       "fallbackFolders": [
         "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"
