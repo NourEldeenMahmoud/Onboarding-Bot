@@ -49,7 +49,7 @@ Update `appsettings.json` with your Discord server IDs:
 
 ## Usage
 
-Users can join the family by typing `!join` in the City Gates channel.
+Users can join the family by typing `/join` in the City Gates channel.
 
 ## Bot Permissions
 
@@ -59,3 +59,4 @@ The bot needs the following permissions:
 - Manage Roles
 - Read Message History
 - Mention Everyone (for story channel)
+- **Use Slash Commands** (applications.commands)

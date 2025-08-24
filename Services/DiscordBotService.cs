@@ -28,6 +28,7 @@ namespace Onboarding_bot.Services
             _client.Ready += ReadyAsync;
             _client.UserJoined += HandleUserJoinedAsync;
             _client.MessageReceived += HandleMessageReceivedAsync;
+            _client.InteractionCreated += HandleInteractionCreatedAsync;
             _client.Disconnected += DisconnectedAsync;
         }
 
@@ -83,8 +84,35 @@ namespace Onboarding_bot.Services
 
         private async Task RegisterCommandsAsync()
         {
-            // No commands to register
-            _logger.LogInformation("Bot ready");
+            try
+            {
+                // Register slash commands
+                var joinCommand = new Discord.ApplicationCommandProperties
+                {
+                    Name = "join",
+                    Description = "انضم إلى العائلة",
+                    Type = Discord.ApplicationCommandType.Slash
+                };
+
+                foreach (var guild in _client.Guilds)
+                {
+                    try
+                    {
+                        await guild.CreateApplicationCommandAsync(joinCommand);
+                        _logger.LogInformation("[Commands] Registered /join command in guild: {GuildName}", guild.Name);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "[Commands] Failed to register command in guild: {GuildName}", guild.Name);
+                    }
+                }
+                
+                _logger.LogInformation("Bot ready with slash commands");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "[Commands] Failed to register slash commands");
+            }
         }
 
         private async Task DisconnectedAsync(Exception exception)
@@ -201,7 +229,7 @@ namespace Onboarding_bot.Services
             {
                 if (message.Author.IsBot) return;
 
-                // Handle /join command
+                // Handle prefix commands (fallback)
                 if (message.Content.StartsWith("/join"))
                 {
                     var user = message.Author as SocketGuildUser;
@@ -355,6 +383,38 @@ namespace Onboarding_bot.Services
             catch (Exception ex)
             {
                 _logger.LogError(ex, "[Error] Failed to handle new user in join command");
+            }
+        }
+
+        private async Task HandleInteractionCreatedAsync(SocketInteraction interaction)
+        {
+            try
+            {
+                if (interaction is SocketSlashCommand slashCommand)
+                {
+                    if (slashCommand.Data.Name == "join")
+                    {
+                        var user = interaction.User as SocketGuildUser;
+                        if (user != null)
+                        {
+                            await slashCommand.DeferAsync();
+                            await HandleJoinCommandAsync(user, interaction.Channel);
+                            await slashCommand.FollowupAsync("تم تنفيذ الأمر بنجاح!");
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "[Error] Failed to handle interaction");
+                try
+                {
+                    if (interaction.HasResponded)
+                        await interaction.FollowupAsync("حدث خطأ أثناء تنفيذ الأمر.", ephemeral: true);
+                    else
+                        await interaction.RespondAsync("حدث خطأ أثناء تنفيذ الأمر.", ephemeral: true);
+                }
+                catch { }
             }
         }
 
