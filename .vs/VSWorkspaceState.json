@@ -1,9 +1,7 @@
 {
   "ExpandedNodes": [
-    "",
-    "\\Handlers",
-    "\\Services"
+    ""
   ],
-  "SelectedNode": "\\Services\\OnboardingService.cs",
+  "SelectedNode": "\\Onboarding bot.sln",
   "PreviewInSolutionExplorer": false
 }

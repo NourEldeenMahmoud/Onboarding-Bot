@@ -34,25 +34,34 @@ namespace Onboarding_bot.Services
 
                 _logger.LogInformation("[Inviter] Checking invites for user {Username}. Found {InviteCount} invites", user.Username, invitesAfter.Count);
 
+                // Log all current invite states
+                foreach (var invite in invitesAfter)
+                {
+                    var previousUses = inviteUses.ContainsKey(invite.Code) ? inviteUses[invite.Code] : 0;
+                    var currentUses = invite.Uses ?? 0;
+                    
+                    _logger.LogInformation("[Inviter] Invite {Code}: Previous uses: {Previous}, Current uses: {Current}, Inviter: {InviterName}", 
+                        invite.Code, previousUses, currentUses, invite.Inviter?.Username ?? "Unknown");
+                }
+
+                // Find the invite that was used by this user
                 RestInviteMetadata usedInvite = null;
                 foreach (var invite in invitesAfter)
                 {
                     var previousUses = inviteUses.ContainsKey(invite.Code) ? inviteUses[invite.Code] : 0;
                     var currentUses = invite.Uses ?? 0;
                     
-                    _logger.LogInformation("[Inviter] Invite {Code}: Previous uses: {Previous}, Current uses: {Current}", 
-                        invite.Code, previousUses, currentUses);
-                    
+                    // Check if this invite was used (current > previous)
                     if (currentUses > previousUses)
                     {
                         usedInvite = invite;
-                        _logger.LogInformation("[Inviter] Found used invite: {Code} by {InviterName}", 
-                            invite.Code, invite.Inviter?.Username ?? "Unknown");
+                        _logger.LogInformation("[Inviter] Found used invite: {Code} by {InviterName} (Uses increased from {Previous} to {Current})", 
+                            invite.Code, invite.Inviter?.Username ?? "Unknown", previousUses, currentUses);
                         break;
                     }
                 }
 
-                // Update invite uses
+                // Update invite uses for future tracking
                 foreach (var invite in invitesAfter)
                 {
                     inviteUses[invite.Code] = invite.Uses ?? 0;
@@ -60,29 +69,34 @@ namespace Onboarding_bot.Services
 
                 string inviterName = usedInvite?.Inviter?.Username ?? "غير معروف";
                 ulong inviterId = usedInvite?.Inviter?.Id ?? 0;
+                string inviterRole = "";
                 string inviterStory = "";
-
-                _logger.LogInformation("[Inviter] Final result for {Username}: Inviter={InviterName} ({InviterId})", 
-                    user.Username, inviterName, inviterId);
 
                 if (inviterId != 0)
                 {
                     var inviterUser = guild.GetUser(inviterId);
-                    var inviterRole = inviterUser?.Roles
-                        .Where(r => r.Id != guild.EveryoneRole.Id)
-                        .OrderByDescending(r => r.Position)
-                        .FirstOrDefault()?.Name ?? "بدون رول";
+                    if (inviterUser != null)
+                    {
+                        inviterRole = inviterUser.Roles
+                            .Where(r => r.Id != guild.EveryoneRole.Id)
+                            .OrderByDescending(r => r.Position)
+                            .FirstOrDefault()?.Name ?? "بدون رول";
 
-                    inviterStory = _storyService.LoadStory(inviterId);
-
-                    return (inviterName, inviterId, inviterRole, inviterStory);
+                        inviterStory = _storyService.LoadStory(inviterId);
+                        
+                        _logger.LogInformation("[Inviter] Inviter details: {InviterName} ({InviterId}), Role: {Role}, HasStory: {HasStory}", 
+                            inviterName, inviterId, inviterRole, !string.IsNullOrEmpty(inviterStory));
+                    }
                 }
 
-                return ("غير معروف", 0, "بدون رول", "");
+                _logger.LogInformation("[Inviter] Final result for {Username}: Inviter={InviterName} ({InviterId}), Role={Role}", 
+                    user.Username, inviterName, inviterId, inviterRole);
+
+                return (inviterName, inviterId, inviterRole, inviterStory);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "[Error] Failed to get inviter info");
+                _logger.LogError(ex, "[Error] Failed to get inviter info for user {Username}", user.Username);
                 return ("غير معروف", 0, "بدون رول", "");
             }
         }
@@ -196,13 +210,17 @@ namespace Onboarding_bot.Services
             var tcs = new TaskCompletionSource<string>();
             var userId = thread.OwnerId;
             var timeoutTask = Task.Delay(timeoutSeconds * 1000);
+            var responseReceived = false;
 
             // Create a local handler that only responds to messages in this specific thread
             Task Handler(SocketMessage msg)
             {
+                if (responseReceived) return Task.CompletedTask; // Prevent multiple responses
+                
                 if (msg.Channel.Id == thread.Id && msg.Author.Id == userId && !msg.Author.IsBot)
                 {
                     _logger.LogInformation("[Response] User {Username} responded: {Response}", msg.Author.Username, msg.Content);
+                    responseReceived = true;
                     tcs.TrySetResult(msg.Content);
                 }
                 return Task.CompletedTask;
